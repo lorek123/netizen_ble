@@ -1,0 +1,46 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from tag
+        id: tag
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Create release archive
+        run: |
+          mkdir -p release
+          cp -r custom_components hacs.json info.md README.md LICENSE release/ 2>/dev/null || true
+          cd release && zip -r "../netizen_ble-${{ steps.tag.outputs.VERSION }}.zip" . && cd ..
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: netizen_ble-${{ steps.tag.outputs.VERSION }}.zip
+          generate_release_notes: true
+          body: |
+            ## Pet Netizen BLE ${{ steps.tag.outputs.VERSION }}
+
+            Home Assistant integration for Pet Netizen / CloudPets feeders (uses [petnetizen_feeder](https://github.com/lorek123/petnetizen_feeder)).
+
+            ### Installation (HACS)
+            1. HACS → Integrations → Custom repositories → add this repo
+            2. Search **Pet Netizen BLE** and install
+            3. Restart HA → Settings → Add integration → Pet Netizen BLE
+
+            Or download the zip and extract `custom_components/netizen_ble` into your config.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

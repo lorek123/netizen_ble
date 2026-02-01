@@ -1,0 +1,49 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add Pet Netizen feeder",
+        "description": "Enter the device MAC address (e.g. E6:C0:07:09:A3:D3). No cloud or app login required.",
+        "data": {
+          "address": "MAC address",
+          "name": "Device name (optional)",
+          "verification_code": "Verification code (optional)"
+        }
+      },
+      "confirm": {
+        "title": "Add Pet Netizen feeder",
+        "description": "Add {name}?"
+      }
+    },
+    "error": {
+      "invalid_address": "Invalid MAC address. Use format XX:XX:XX:XX:XX:XX",
+      "not_supported": "This device is not a supported Pet Netizen feeder",
+      "no_discovery": "No discovery info"
+    },
+    "abort": {
+      "not_supported": "This device is not a supported Pet Netizen feeder",
+      "already_configured": "Device is already configured",
+      "no_discovery": "No discovery info"
+    }
+  },
+  "entity": {
+    "switch": {
+      "manual_feed": "Manual feed",
+      "child_lock": "Child lock",
+      "prompt_sound": "Prompt sound"
+    },
+    "sensor": {
+      "feed_plan": "Feed plan"
+    },
+    "binary_sensor": {
+      "child_lock": "Child lock"
+    },
+    "button": {
+      "feed_now": "Feed now",
+      "query_feed_plan": "Refresh schedule"
+    },
+    "number": {
+      "portions": "Portions"
+    }
+  }
+}

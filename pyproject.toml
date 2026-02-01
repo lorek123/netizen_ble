@@ -1,0 +1,23 @@
+[project]
+name = "netizen-ble"
+version = "2.0.0"
+description = "Home Assistant integration for Pet Netizen BLE feeders (HACS)"
+readme = "README.md"
+requires-python = ">=3.12"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.8.0",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["custom_components"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C4"]
+ignore = ["E501"]  # line length handled by formatter
+
+[tool.ruff.format]
+quote-style = "double"
