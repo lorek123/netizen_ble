@@ -10,28 +10,33 @@ from homeassistant.components.bluetooth import BluetoothServiceInfoBleak
 from homeassistant.config_entries import ConfigFlow
 from homeassistant.const import CONF_ADDRESS
 from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers import selector
 
-from .const import DOMAIN, SERVICE_UUID, SUPPORTED_BLE_NAMES
+from .const import CONF_DEVICE_TYPE, DOMAIN, SERVICE_UUIDS, SUPPORTED_BLE_NAME_PREFIXES
 
 _LOGGER = logging.getLogger(__name__)
 
 
 def _is_netizen_device(info: BluetoothServiceInfoBleak) -> bool:
-    """Check if device uses Netizen feeder service UUID or known name."""
+    """Check if device uses Netizen feeder service UUID or known name prefix."""
     if info.service_uuids:
         for uuid in info.service_uuids:
-            if SERVICE_UUID.lower() in str(uuid).lower():
+            if str(uuid).lower() in {u.lower() for u in SERVICE_UUIDS}:
                 return True
     name = (info.name or "").strip().upper()
-    for prefix in SUPPORTED_BLE_NAMES:
-        if name.startswith(prefix.upper()):
-            return True
-    return False
+    return any(name.startswith(p.upper()) for p in SUPPORTED_BLE_NAME_PREFIXES)
 
 
-def _detect_device_type(info: BluetoothServiceInfoBleak) -> str:
-    """Return device type for discovery (feeder-only)."""
-    return "feeder"
+def _detect_device_type_from_name(name: str | None) -> str:
+    """Return device type for protocol: standard, jk, or ali."""
+    if not name or not name.strip():
+        return "standard"
+    name_upper = name.strip().upper()
+    if "JK" in name_upper:
+        return "jk"
+    if "ALI" in name_upper or "ALIBABA" in name_upper:
+        return "ali"
+    return "standard"
 
 
 class NetizenBLEConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -42,6 +47,7 @@ class NetizenBLEConfigFlow(ConfigFlow, domain=DOMAIN):
     def __init__(self) -> None:
         super().__init__()
         self._discovery: BluetoothServiceInfoBleak | None = None
+        self._discovered: list[tuple[str, str, str]] = []  # (address, name, device_type)
 
     async def async_step_bluetooth(self, discovery_info: BluetoothServiceInfoBleak) -> FlowResult:
         """Handle Bluetooth discovery."""
@@ -54,6 +60,29 @@ class NetizenBLEConfigFlow(ConfigFlow, domain=DOMAIN):
         return await self.async_step_confirm()
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Choose add method: manual MAC or discover."""
+        if user_input is not None:
+            if user_input.get("method") == "discover":
+                return await self.async_step_discover()
+            return await self.async_step_manual()
+        return self.async_show_form(
+            step_id="user",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("method", default="manual"): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                selector.SelectOptionDict(value="manual", label="Enter MAC address"),
+                                selector.SelectOptionDict(value="discover", label="Search for devices"),
+                            ],
+                            mode=selector.SelectSelectorMode.LIST,
+                        )
+                    ),
+                }
+            ),
+        )
+
+    async def async_step_manual(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Handle manual add by MAC address."""
         errors: dict[str, str] = {}
         if user_input:
@@ -63,7 +92,7 @@ class NetizenBLEConfigFlow(ConfigFlow, domain=DOMAIN):
             if len(addr) == 17 and addr.count(":") == 5:
                 await self.async_set_unique_id(addr)
                 self._abort_if_unique_id_configured()
-                data = {CONF_ADDRESS: addr}
+                data: dict[str, Any] = {CONF_ADDRESS: addr}
                 if user_input.get("verification_code"):
                     data["verification_code"] = user_input["verification_code"].strip()
                 return self.async_create_entry(
@@ -73,7 +102,7 @@ class NetizenBLEConfigFlow(ConfigFlow, domain=DOMAIN):
             errors["base"] = "invalid_address"
 
         return self.async_show_form(
-            step_id="user",
+            step_id="manual",
             data_schema=vol.Schema(
                 {
                     vol.Required(
@@ -89,15 +118,123 @@ class NetizenBLEConfigFlow(ConfigFlow, domain=DOMAIN):
             },
         )
 
+    async def async_step_discover(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Run BLE scan and let user pick a feeder (library discover_feeders)."""
+        from petnetizen_feeder import discover_feeders
+
+        # Run or re-run discovery when first entering or when retrying after no devices found
+        if user_input is None or not self._discovered:
+            self._discovered = await discover_feeders(timeout=12.0)
+            if not self._discovered:
+                return self.async_show_form(
+                    step_id="discover",
+                    data_schema=vol.Schema(
+                        {vol.Optional("retry", default=True): bool}
+                    ),
+                    errors={"base": "no_devices_found"},
+                )
+
+        # If we have no selection yet, show the device picker
+        if user_input is not None and CONF_ADDRESS not in user_input:
+            # User submitted the "no devices" retry form - already re-ran discovery above
+            if not self._discovered:
+                return self.async_show_form(
+                    step_id="discover",
+                    data_schema=vol.Schema(
+                        {vol.Optional("retry", default=True): bool}
+                    ),
+                    errors={"base": "no_devices_found"},
+                )
+            options = [
+                selector.SelectOptionDict(value=addr, label=f"{name} ({addr})")
+                for addr, name, _ in self._discovered
+            ]
+            return self.async_show_form(
+                step_id="discover",
+                data_schema=vol.Schema(
+                    {
+                        vol.Required(CONF_ADDRESS): selector.SelectSelector(
+                            selector.SelectSelectorConfig(
+                                options=options,
+                                mode=selector.SelectSelectorMode.LIST,
+                            )
+                        ),
+                        vol.Optional("verification_code", default="00000000"): str,
+                    }
+                ),
+            )
+
+        if user_input is None:
+            options = [
+                selector.SelectOptionDict(value=addr, label=f"{name} ({addr})")
+                for addr, name, _ in self._discovered
+            ]
+            return self.async_show_form(
+                step_id="discover",
+                data_schema=vol.Schema(
+                    {
+                        vol.Required(CONF_ADDRESS): selector.SelectSelector(
+                            selector.SelectSelectorConfig(
+                                options=options,
+                                mode=selector.SelectSelectorMode.LIST,
+                            )
+                        ),
+                        vol.Optional("verification_code", default="00000000"): str,
+                    }
+                ),
+            )
+
+        addr = (user_input.get(CONF_ADDRESS) or "").strip()
+        verification_code = (user_input.get("verification_code") or "00000000").strip()
+        selected = next((t for t in self._discovered if t[0] == addr), None)
+        if not selected:
+            return self.async_show_form(
+                step_id="discover",
+                data_schema=vol.Schema(
+                    {
+                        vol.Required(CONF_ADDRESS): selector.SelectSelector(
+                            selector.SelectSelectorConfig(
+                                options=[
+                                    selector.SelectOptionDict(
+                                        value=a, label=f"{n} ({a})"
+                                    )
+                                    for a, n, _ in self._discovered
+                                ],
+                                mode=selector.SelectSelectorMode.LIST,
+                            )
+                        ),
+                        vol.Optional("verification_code", default="00000000"): str,
+                    }
+                ),
+                errors={"base": "invalid_selection"},
+            )
+        _addr, name, device_type = selected
+        await self.async_set_unique_id(addr)
+        self._abort_if_unique_id_configured()
+        data: dict[str, Any] = {
+            CONF_ADDRESS: addr,
+            CONF_DEVICE_TYPE: device_type,
+        }
+        if verification_code:
+            data["verification_code"] = verification_code
+        return self.async_create_entry(
+            title=name or f"Netizen {addr[-8:].replace(':', '')}",
+            data=data,
+        )
+
     async def async_step_confirm(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Confirm discovered device."""
+        """Confirm discovered device (Bluetooth)."""
         if not self._discovery:
             return self.async_abort(reason="no_discovery")
         if user_input is not None:
-            device_type = _detect_device_type(self._discovery)
+            device_type = _detect_device_type_from_name(self._discovery.name)
+            data: dict[str, Any] = {
+                CONF_ADDRESS: self._discovery.address,
+                CONF_DEVICE_TYPE: device_type,
+            }
             return self.async_create_entry(
                 title=self._discovery.name or self._discovery.address,
-                data={CONF_ADDRESS: self._discovery.address, "device_type": device_type},
+                data=data,
             )
         self._set_confirm_only()
         return self.async_show_form(
@@ -113,9 +250,11 @@ class NetizenBLEConfigFlow(ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="invalid_address")
         await self.async_set_unique_id(addr)
         self._abort_if_unique_id_configured()
-        data = {CONF_ADDRESS: addr}
+        data: dict[str, Any] = {CONF_ADDRESS: addr}
         if import_data.get("verification_code"):
             data["verification_code"] = import_data["verification_code"]
+        if import_data.get("device_type") in ("standard", "jk", "ali"):
+            data[CONF_DEVICE_TYPE] = import_data["device_type"]
         return self.async_create_entry(
             title=import_data.get("name") or f"Netizen {addr[-8:].replace(':', '')}",
             data=data,

@@ -27,6 +27,11 @@ BUTTONS: list[ButtonEntityDescription] = [
         translation_key="query_feed_plan",
         icon="mdi:calendar-refresh",
     ),
+    ButtonEntityDescription(
+        key="sync_time",
+        translation_key="sync_time",
+        icon="mdi:clock-sync",
+    ),
 ]
 
 
@@ -74,4 +79,6 @@ class NetizenBLEButton(CoordinatorEntity[NetizenBLECoordinator], ButtonEntity):
             await self._device.trigger_feed(portions=portions)
         elif self.entity_description.key == "query_feed_plan":
             await self._device.query_feed_plan()
+        elif self.entity_description.key == "sync_time":
+            await self._device.sync_time()
         await self.coordinator.async_request_refresh()

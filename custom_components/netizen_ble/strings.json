@@ -3,7 +3,11 @@
     "step": {
       "user": {
         "title": "Add Pet Netizen feeder",
-        "description": "Enter the device MAC address (e.g. E6:C0:07:09:A3:D3). No cloud or app login required.",
+        "description": "Choose how to add the device."
+      },
+      "manual": {
+        "title": "Enter MAC address",
+        "description": "{hint}",
         "data": {
           "address": "MAC address",
           "name": "Device name (optional)",
@@ -14,6 +18,14 @@
           "verification_code": "Leave default 00000000 unless you use a custom code in the app"
         }
       },
+      "discover": {
+        "title": "Search for devices",
+        "description": "Select a feeder found by BLE scan.",
+        "data": {
+          "address": "Device",
+          "verification_code": "Verification code (optional)"
+        }
+      },
       "confirm": {
         "title": "Add Pet Netizen feeder",
         "description": "Add {name}?"
@@ -22,7 +34,9 @@
     "error": {
       "invalid_address": "Invalid MAC address. Use format XX:XX:XX:XX:XX:XX",
       "not_supported": "This device is not a supported Pet Netizen feeder",
-      "no_discovery": "No discovery info"
+      "no_discovery": "No discovery info",
+      "no_devices_found": "No feeders found. Make sure the device is on and in range.",
+      "invalid_selection": "Please select a device."
     },
     "abort": {
       "not_supported": "This device is not a supported Pet Netizen feeder",

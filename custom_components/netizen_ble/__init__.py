@@ -11,7 +11,7 @@ from homeassistant.core import Event, HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
 
-from .const import CONF_VERIFICATION_CODE, DEFAULT_VERIFICATION_CODE, DOMAIN
+from .const import CONF_DEVICE_TYPE, CONF_VERIFICATION_CODE, DEFAULT_VERIFICATION_CODE, DOMAIN
 from .coordinator import NetizenBLECoordinator
 from .device import NetizenBLEDevice
 
@@ -32,8 +32,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if len(address) == 12 and ":" not in address:
         address = ":".join(address[i : i + 2] for i in range(0, 12, 2))
     verification_code = entry.data.get(CONF_VERIFICATION_CODE) or DEFAULT_VERIFICATION_CODE
+    device_type = entry.data.get(CONF_DEVICE_TYPE)
 
-    device = NetizenBLEDevice(address, verification_code=verification_code)
+    device = NetizenBLEDevice(
+        address,
+        verification_code=verification_code,
+        device_type=device_type,
+    )
     if not await device.connect():
         raise ConfigEntryNotReady(f"Could not connect to feeder {address}")
 

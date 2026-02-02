@@ -33,14 +33,16 @@
       "prompt_sound": "Prompt sound"
     },
     "sensor": {
-      "feed_plan": "Feed plan"
+      "feed_plan": "Feed plan",
+      "firmware_version": "Firmware version"
     },
     "binary_sensor": {
       "child_lock": "Child lock"
     },
     "button": {
       "feed_now": "Feed now",
-      "query_feed_plan": "Refresh schedule"
+      "query_feed_plan": "Refresh schedule",
+      "sync_time": "Sync time"
     },
     "number": {
       "portions": "Portions"

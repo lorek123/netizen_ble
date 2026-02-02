@@ -18,14 +18,23 @@ _LOGGER = logging.getLogger(__name__)
 class NetizenBLEDevice:
     """Wrapper around petnetizen_feeder FeederDevice for Home Assistant."""
 
-    def __init__(self, address: str, verification_code: str = DEFAULT_VERIFICATION_CODE) -> None:
+    def __init__(
+        self,
+        address: str,
+        verification_code: str = DEFAULT_VERIFICATION_CODE,
+        device_type: str | None = None,
+    ) -> None:
         self._address = (
             address.upper()
             if ":" in address
             else ":".join(address[i : i + 2] for i in range(0, min(12, len(address)), 2))
         )
         self._verification_code = verification_code or DEFAULT_VERIFICATION_CODE
-        self._device = LibraryFeederDevice(self._address, self._verification_code)
+        self._device = LibraryFeederDevice(
+            self._address,
+            self._verification_code,
+            device_type=device_type,
+        )
         self._state: dict[str, Any] = {}
         self._listeners: list[Callable[[dict[str, Any]], None]] = []
         self._lock = asyncio.Lock()
@@ -73,10 +82,32 @@ class NetizenBLEDevice:
         try:
             ok = await self._device.connect()
             if ok:
+                await self._fetch_device_info()
                 await self.query_status()
             return ok
         except Exception as e:
             _LOGGER.warning("Netizen BLE connect error: %s", e)
+            return False
+
+    async def _fetch_device_info(self) -> None:
+        """Query device name and firmware version from feeder."""
+        try:
+            info = await self._device.get_device_info()
+            if info.get("device_name"):
+                self._state["device_name"] = info["device_name"]
+            if info.get("device_version"):
+                self._state["device_version"] = info["device_version"]
+            self._notify_listeners()
+        except Exception as e:
+            _LOGGER.debug("get_device_info failed: %s", e)
+
+    async def sync_time(self) -> bool:
+        """Sync feeder clock with host time."""
+        try:
+            await self._device.sync_time()
+            return True
+        except Exception as e:
+            _LOGGER.warning("Sync time failed: %s", e)
             return False
 
     async def disconnect(self) -> None:

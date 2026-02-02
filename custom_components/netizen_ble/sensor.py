@@ -23,6 +23,11 @@ SENSORS: list[SensorEntityDescription] = [
         translation_key="feed_plan",
         icon="mdi:calendar-clock",
     ),
+    SensorEntityDescription(
+        key="firmware_version",
+        translation_key="firmware_version",
+        icon="mdi:chip",
+    ),
 ]
 
 
@@ -70,13 +75,17 @@ class NetizenBLESensor(CoordinatorEntity[NetizenBLECoordinator], SensorEntity):
         if self.entity_description.key == "feed_plan":
             slots = data.get("feed_plan_slots") or []
             return len(slots)
+        if self.entity_description.key == "firmware_version":
+            return data.get("device_version") or None
         return None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Expose schedule slots in attributes."""
+        """Expose schedule slots / device info in attributes."""
         data = self.coordinator.data or {}
         attrs: dict[str, Any] = {}
         if self.entity_description.key == "feed_plan" and "feed_plan_slots" in data:
             attrs["slots"] = data["feed_plan_slots"]
+        if self.entity_description.key == "firmware_version" and data.get("device_name"):
+            attrs["device_name"] = data["device_name"]
         return attrs
