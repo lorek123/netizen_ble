@@ -95,7 +95,7 @@ class NetizenBLESwitch(CoordinatorEntity[NetizenBLECoordinator], SwitchEntity):
             await self._device.set_child_lock(True)
         elif key == "prompt_sound":
             await self._device.set_prompt_sound(True)
-        await self.coordinator.async_request_refresh()
+        self.coordinator.hass.async_create_task(self.coordinator.async_request_refresh())
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         if self._is_feed:
@@ -105,4 +105,4 @@ class NetizenBLESwitch(CoordinatorEntity[NetizenBLECoordinator], SwitchEntity):
             await self._device.set_child_lock(False)
         elif key == "prompt_sound":
             await self._device.set_prompt_sound(False)
-        await self.coordinator.async_request_refresh()
+        self.coordinator.hass.async_create_task(self.coordinator.async_request_refresh())

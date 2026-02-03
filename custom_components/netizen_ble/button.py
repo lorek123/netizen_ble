@@ -81,4 +81,5 @@ class NetizenBLEButton(CoordinatorEntity[NetizenBLECoordinator], ButtonEntity):
             await self._device.query_feed_plan()
         elif self.entity_description.key == "sync_time":
             await self._device.sync_time()
-        await self.coordinator.async_request_refresh()
+        # Refresh in background so the button returns immediately; state will update shortly
+        self.coordinator.hass.async_create_task(self.coordinator.async_request_refresh())
