@@ -78,9 +78,9 @@ class NetizenBLEDevice:
 
         return unsubscribe
 
-    async def connect(self) -> bool:
+    async def connect(self, ble_client: Any = None) -> bool:
         try:
-            ok = await self._device.connect()
+            ok = await self._device.connect(ble_client=ble_client)
             if ok:
                 await self._fetch_device_info()
                 await self.query_status()

@@ -5,6 +5,9 @@ from __future__ import annotations
 import logging
 
 import voluptuous as vol
+from bleak import BleakClient
+from bleak_retry_connector import establish_connection, get_device
+from homeassistant.components import bluetooth
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ADDRESS, CONF_DEVICE_ID, EVENT_HOMEASSISTANT_STOP, Platform
 from homeassistant.core import Event, HomeAssistant
@@ -34,12 +37,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     verification_code = entry.data.get(CONF_VERIFICATION_CODE) or DEFAULT_VERIFICATION_CODE
     device_type = entry.data.get(CONF_DEVICE_TYPE)
 
+    ble_device = bluetooth.async_ble_device_from_address(hass, address, True) or await get_device(
+        address
+    )
+    if not ble_device:
+        raise ConfigEntryNotReady(f"Could not find feeder with address {address}")
+
+    ble_client = await establish_connection(
+        BleakClient,
+        ble_device,
+        entry.title or f"Pet Netizen {address[-8:].replace(':', '')}",
+    )
+
     device = NetizenBLEDevice(
         address,
         verification_code=verification_code,
         device_type=device_type,
     )
-    if not await device.connect():
+    if not await device.connect(ble_client=ble_client):
         raise ConfigEntryNotReady(f"Could not connect to feeder {address}")
 
     coordinator = NetizenBLECoordinator(hass, device)

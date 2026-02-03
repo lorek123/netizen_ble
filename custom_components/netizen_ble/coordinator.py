@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import timedelta
 from typing import Any
 
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
@@ -13,7 +14,7 @@ from .device import NetizenBLEDevice
 
 _LOGGER = logging.getLogger(__name__)
 
-POLL_INTERVAL = 60.0
+POLL_INTERVAL = timedelta(seconds=60)
 
 
 class NetizenBLECoordinator(DataUpdateCoordinator[dict[str, Any]]):
