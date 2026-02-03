@@ -51,7 +51,10 @@ class NetizenBLECoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except Exception as e:
             _LOGGER.debug("Netizen query_status failed: %s", e)
         await asyncio.sleep(1.0)
-        return dict(getattr(self._device, "_state", {}))
+        # Return merged state (device state + optimistic) so switch/sensor stay in sync
+        state = getattr(self._device, "_state", {})
+        optimistic = getattr(self._device, "_optimistic", {})
+        return {**state, **optimistic}
 
     async def async_unload(self) -> None:
         if self._unsub:
