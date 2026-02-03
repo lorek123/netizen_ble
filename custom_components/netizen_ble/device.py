@@ -38,7 +38,7 @@ class NetizenBLEDevice:
         self._state: dict[str, Any] = {}
         self._listeners: list[Callable[[dict[str, Any]], None]] = []
         self._lock = asyncio.Lock()
-        # Optimistic state (library doesn't return child_lock/prompt_sound from device)
+        # Optimistic state before device is queried (query_status fetches child_lock/prompt_sound)
         self._optimistic: dict[str, Any] = {}
 
     @property
@@ -190,6 +190,23 @@ class NetizenBLEDevice:
                 self._notify_listeners()
             except Exception as e:
                 _LOGGER.debug("Query schedule failed: %s", e)
+
+            # Query child lock and prompt sound so switches reflect device state
+            try:
+                child_lock = await self._device.get_child_lock_status()
+                if child_lock is not None:
+                    self._state["child_lock"] = child_lock
+                    self._optimistic.pop("child_lock", None)
+            except Exception as e:
+                _LOGGER.debug("Query child lock failed: %s", e)
+            try:
+                prompt_sound = await self._device.get_prompt_sound_status()
+                if prompt_sound is not None:
+                    self._state["prompt_sound"] = prompt_sound
+                    self._optimistic.pop("prompt_sound", None)
+            except Exception as e:
+                _LOGGER.debug("Query prompt sound failed: %s", e)
+            self._notify_listeners()
 
     async def query_feed_plan(self) -> bool:
         """Request schedule refresh."""
