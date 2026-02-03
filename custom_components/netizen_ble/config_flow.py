@@ -72,8 +72,12 @@ class NetizenBLEConfigFlow(ConfigFlow, domain=DOMAIN):
                     vol.Required("method", default="manual"): selector.SelectSelector(
                         selector.SelectSelectorConfig(
                             options=[
-                                selector.SelectOptionDict(value="manual", label="Enter MAC address"),
-                                selector.SelectOptionDict(value="discover", label="Search for devices"),
+                                selector.SelectOptionDict(
+                                    value="manual", label="Enter MAC address"
+                                ),
+                                selector.SelectOptionDict(
+                                    value="discover", label="Search for devices"
+                                ),
                             ],
                             mode=selector.SelectSelectorMode.LIST,
                         )
@@ -128,9 +132,7 @@ class NetizenBLEConfigFlow(ConfigFlow, domain=DOMAIN):
             if not self._discovered:
                 return self.async_show_form(
                     step_id="discover",
-                    data_schema=vol.Schema(
-                        {vol.Optional("retry", default=True): bool}
-                    ),
+                    data_schema=vol.Schema({vol.Optional("retry", default=True): bool}),
                     errors={"base": "no_devices_found"},
                 )
 
@@ -140,9 +142,7 @@ class NetizenBLEConfigFlow(ConfigFlow, domain=DOMAIN):
             if not self._discovered:
                 return self.async_show_form(
                     step_id="discover",
-                    data_schema=vol.Schema(
-                        {vol.Optional("retry", default=True): bool}
-                    ),
+                    data_schema=vol.Schema({vol.Optional("retry", default=True): bool}),
                     errors={"base": "no_devices_found"},
                 )
             options = [
@@ -195,9 +195,7 @@ class NetizenBLEConfigFlow(ConfigFlow, domain=DOMAIN):
                         vol.Required(CONF_ADDRESS): selector.SelectSelector(
                             selector.SelectSelectorConfig(
                                 options=[
-                                    selector.SelectOptionDict(
-                                        value=a, label=f"{n} ({a})"
-                                    )
+                                    selector.SelectOptionDict(value=a, label=f"{n} ({a})")
                                     for a, n, _ in self._discovered
                                 ],
                                 mode=selector.SelectSelectorMode.LIST,
