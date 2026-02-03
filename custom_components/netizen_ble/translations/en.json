@@ -28,24 +28,24 @@
   },
   "entity": {
     "switch": {
-      "manual_feed": "Manual feed",
-      "child_lock": "Child lock",
-      "prompt_sound": "Prompt sound"
+      "manual_feed": { "name": "Manual feed" },
+      "child_lock": { "name": "Child lock" },
+      "prompt_sound": { "name": "Prompt sound" }
     },
     "sensor": {
-      "feed_plan": "Feed plan",
-      "firmware_version": "Firmware version"
+      "feed_plan": { "name": "Feed plan" },
+      "firmware_version": { "name": "Firmware version" }
     },
     "binary_sensor": {
-      "child_lock": "Child lock"
+      "child_lock": { "name": "Child lock" }
     },
     "button": {
-      "feed_now": "Feed now",
-      "query_feed_plan": "Refresh schedule",
-      "sync_time": "Sync time"
+      "feed_now": { "name": "Feed now" },
+      "query_feed_plan": { "name": "Refresh schedule" },
+      "sync_time": { "name": "Sync time" }
     },
     "number": {
-      "portions": "Portions"
+      "portions": { "name": "Portions" }
     }
   }
 }

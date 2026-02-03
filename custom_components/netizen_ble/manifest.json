@@ -1,15 +1,6 @@
 {
   "domain": "netizen_ble",
   "name": "Pet Netizen BLE",
-  "codeowners": ["@lorek123"],
-  "config_flow": true,
-  "dependencies": ["bluetooth"],
-  "documentation": "https://github.com/lorek123/netizen_ble",
-  "integration_type": "device",
-  "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/lorek123/netizen_ble/issues",
-  "requirements": ["petnetizen-feeder>=0.2.0"],
-  "version": "2.1.0",
   "bluetooth": [
     {
       "connectable": true,
@@ -23,5 +14,14 @@
       "connectable": true,
       "service_uuid": "0000ffff-0000-1000-8000-00805f9b34fb"
     }
-  ]
+  ],
+  "codeowners": ["@lorek123"],
+  "config_flow": true,
+  "dependencies": ["bluetooth"],
+  "documentation": "https://github.com/lorek123/netizen_ble",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/lorek123/netizen_ble/issues",
+  "requirements": ["petnetizen-feeder>=0.2.0"],
+  "version": "2.1.0"
 }
