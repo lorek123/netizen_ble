@@ -5,17 +5,12 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from bleak import BleakClient
-from bleak_retry_connector import establish_connection, get_device
 from petnetizen_feeder import FeederDevice as LibraryFeederDevice
 from petnetizen_feeder import FeedSchedule, Weekday
 
 from .const import DEFAULT_VERIFICATION_CODE
-
-if TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -28,9 +23,6 @@ class NetizenBLEDevice:
         address: str,
         verification_code: str = DEFAULT_VERIFICATION_CODE,
         device_type: str | None = None,
-        *,
-        hass: HomeAssistant | None = None,
-        entry_title: str = "",
     ) -> None:
         self._address = (
             address.upper()
@@ -43,8 +35,6 @@ class NetizenBLEDevice:
             self._verification_code,
             device_type=device_type,
         )
-        self._hass = hass
-        self._entry_title = entry_title or self._address
         self._state: dict[str, Any] = {}
         self._listeners: list[Callable[[dict[str, Any]], None]] = []
         self._lock = asyncio.Lock()
@@ -61,9 +51,6 @@ class NetizenBLEDevice:
     @property
     def name(self) -> str:
         return self._state.get("device_name") or self._address
-
-    def set_ble_device(self, _ble_device: Any) -> None:
-        """No-op: library uses address only."""
 
     def get_state(self, key: str, default: Any = None) -> Any:
         if key in self._optimistic:
@@ -87,9 +74,9 @@ class NetizenBLEDevice:
 
         return unsubscribe
 
-    async def connect(self, ble_client: Any = None) -> bool:
+    async def connect(self) -> bool:
         try:
-            ok = await self._device.connect(ble_client=ble_client)
+            ok = await self._device.connect()
             if ok:
                 await self._fetch_device_info()
                 await self.query_status()
@@ -99,39 +86,21 @@ class NetizenBLEDevice:
             return False
 
     async def async_ensure_connected(self) -> bool:
-        """Reconnect via HA bluetooth + bleak_retry_connector if disconnected."""
+        """Reconnect if disconnected."""
         if self._device.is_connected:
             return True
-
-        if self._hass is None:
-            _LOGGER.debug("No hass reference, skipping HA-level reconnect")
-            return False
 
         async with self._lock:
             if self._device.is_connected:
                 return True
 
-            _LOGGER.info("Feeder %s disconnected, reconnecting via HA bluetooth", self._address)
+            _LOGGER.info("Feeder %s disconnected, reconnecting", self._address)
             try:
-                from homeassistant.components import bluetooth
-
-                ble_device = bluetooth.async_ble_device_from_address(
-                    self._hass, self._address, True
-                ) or await get_device(self._address)
-
-                if not ble_device:
-                    _LOGGER.warning("Cannot find BLE device %s for reconnection", self._address)
-                    return False
-
-                ble_client = await establish_connection(
-                    BleakClient,
-                    ble_device,
-                    self._entry_title,
-                )
-
-                ok = await self._device.reconnect(ble_client=ble_client)
+                ok = await self._device.connect()
                 if ok:
                     _LOGGER.info("Reconnected to feeder %s", self._address)
+                else:
+                    _LOGGER.warning("Reconnection to %s failed", self._address)
                 return ok
             except Exception as e:
                 _LOGGER.warning("Reconnection to %s failed: %s", self._address, e)
