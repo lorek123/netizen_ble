@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
@@ -14,8 +13,6 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import NetizenBLECoordinator
-
-_LOGGER = logging.getLogger(__name__)
 
 SENSORS: list[SensorEntityDescription] = [
     SensorEntityDescription(

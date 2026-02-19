@@ -5,12 +5,17 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
+from bleak import BleakClient
+from bleak_retry_connector import establish_connection, get_device
 from petnetizen_feeder import FeederDevice as LibraryFeederDevice
 from petnetizen_feeder import FeedSchedule, Weekday
 
 from .const import DEFAULT_VERIFICATION_CODE
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -23,6 +28,9 @@ class NetizenBLEDevice:
         address: str,
         verification_code: str = DEFAULT_VERIFICATION_CODE,
         device_type: str | None = None,
+        *,
+        hass: HomeAssistant | None = None,
+        entry_title: str = "",
     ) -> None:
         self._address = (
             address.upper()
@@ -35,10 +43,11 @@ class NetizenBLEDevice:
             self._verification_code,
             device_type=device_type,
         )
+        self._hass = hass
+        self._entry_title = entry_title or self._address
         self._state: dict[str, Any] = {}
         self._listeners: list[Callable[[dict[str, Any]], None]] = []
         self._lock = asyncio.Lock()
-        # Optimistic state before device is queried (query_status fetches child_lock/prompt_sound)
         self._optimistic: dict[str, Any] = {}
 
     @property
@@ -86,8 +95,47 @@ class NetizenBLEDevice:
                 await self.query_status()
             return ok
         except Exception as e:
-            _LOGGER.warning("Netizen BLE connect error: %s", e)
+            _LOGGER.debug("Netizen BLE connect error: %s", e)
             return False
+
+    async def async_ensure_connected(self) -> bool:
+        """Reconnect via HA bluetooth + bleak_retry_connector if disconnected."""
+        if self._device.is_connected:
+            return True
+
+        if self._hass is None:
+            _LOGGER.debug("No hass reference, skipping HA-level reconnect")
+            return False
+
+        async with self._lock:
+            if self._device.is_connected:
+                return True
+
+            _LOGGER.info("Feeder %s disconnected, reconnecting via HA bluetooth", self._address)
+            try:
+                from homeassistant.components import bluetooth
+
+                ble_device = bluetooth.async_ble_device_from_address(
+                    self._hass, self._address, True
+                ) or await get_device(self._address)
+
+                if not ble_device:
+                    _LOGGER.warning("Cannot find BLE device %s for reconnection", self._address)
+                    return False
+
+                ble_client = await establish_connection(
+                    BleakClient,
+                    ble_device,
+                    self._entry_title,
+                )
+
+                ok = await self._device.reconnect(ble_client=ble_client)
+                if ok:
+                    _LOGGER.info("Reconnected to feeder %s", self._address)
+                return ok
+            except Exception as e:
+                _LOGGER.warning("Reconnection to %s failed: %s", self._address, e)
+                return False
 
     async def _fetch_device_info(self) -> None:
         """Query device name and firmware version from feeder."""
@@ -103,11 +151,12 @@ class NetizenBLEDevice:
 
     async def sync_time(self) -> bool:
         """Sync feeder clock with host time."""
+        await self.async_ensure_connected()
         try:
             await self._device.sync_time()
             return True
         except Exception as e:
-            _LOGGER.warning("Sync time failed: %s", e)
+            _LOGGER.debug("Sync time failed: %s", e)
             return False
 
     async def disconnect(self) -> None:
@@ -118,13 +167,15 @@ class NetizenBLEDevice:
         self._state.clear()
 
     async def trigger_feed(self, portions: int = 1) -> bool:
+        await self.async_ensure_connected()
         try:
             return await self._device.feed(portions=min(15, max(1, portions)))
         except Exception as e:
-            _LOGGER.warning("Feed failed: %s", e)
+            _LOGGER.debug("Feed failed: %s", e)
             return False
 
     async def set_child_lock(self, locked: bool) -> bool:
+        await self.async_ensure_connected()
         try:
             ok = await self._device.set_child_lock(locked)
             if ok:
@@ -132,10 +183,11 @@ class NetizenBLEDevice:
                 self._notify_listeners()
             return ok
         except Exception as e:
-            _LOGGER.warning("Set child lock failed: %s", e)
+            _LOGGER.debug("Set child lock failed: %s", e)
             return False
 
     async def set_prompt_sound(self, on: bool) -> bool:
+        await self.async_ensure_connected()
         try:
             ok = await self._device.set_sound(on)
             if ok:
@@ -143,7 +195,7 @@ class NetizenBLEDevice:
                 self._notify_listeners()
             return ok
         except Exception as e:
-            _LOGGER.warning("Set sound failed: %s", e)
+            _LOGGER.debug("Set sound failed: %s", e)
             return False
 
     async def set_feed_plan(self, slots: list[dict]) -> bool:
@@ -159,10 +211,11 @@ class NetizenBLEDevice:
             schedules.append(
                 FeedSchedule(weekdays=weekdays, time=time_str, portions=portions, enabled=enabled)
             )
+        await self.async_ensure_connected()
         try:
             return await self._device.set_schedule(schedules)
         except Exception as e:
-            _LOGGER.warning("Set schedule failed: %s", e)
+            _LOGGER.debug("Set schedule failed: %s", e)
             return False
 
     async def query_status(self) -> None:

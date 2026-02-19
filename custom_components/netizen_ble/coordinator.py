@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import timedelta
 from typing import Any
@@ -45,13 +44,16 @@ class NetizenBLECoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.async_set_updated_data(state)
 
     async def _async_update_data(self) -> dict[str, Any]:
-        """Poll device for status."""
-        try:
-            await self._device.query_status()
-        except Exception as e:
-            _LOGGER.debug("Netizen query_status failed: %s", e)
-        await asyncio.sleep(1.0)
-        # Return merged state (device state + optimistic) so switch/sensor stay in sync
+        """Poll device for status, reconnecting first if needed."""
+        if not self._device.is_connected:
+            await self._device.async_ensure_connected()
+
+        if self._device.is_connected:
+            try:
+                await self._device.query_status()
+            except Exception as e:
+                _LOGGER.debug("Netizen query_status failed: %s", e)
+
         state = getattr(self._device, "_state", {})
         optimistic = getattr(self._device, "_optimistic", {})
         return {**state, **optimistic}

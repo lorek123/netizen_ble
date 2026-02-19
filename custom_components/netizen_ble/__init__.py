@@ -43,16 +43,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not ble_device:
         raise ConfigEntryNotReady(f"Could not find feeder with address {address}")
 
+    entry_title = entry.title or f"Pet Netizen {address[-8:].replace(':', '')}"
+
     ble_client = await establish_connection(
         BleakClient,
         ble_device,
-        entry.title or f"Pet Netizen {address[-8:].replace(':', '')}",
+        entry_title,
     )
-
     device = NetizenBLEDevice(
         address,
         verification_code=verification_code,
         device_type=device_type,
+        hass=hass,
+        entry_title=entry_title,
     )
     if not await device.connect(ble_client=ble_client):
         raise ConfigEntryNotReady(f"Could not connect to feeder {address}")

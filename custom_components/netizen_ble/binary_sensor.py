@@ -2,16 +2,12 @@
 
 from __future__ import annotations
 
-import logging
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
 from .coordinator import NetizenBLECoordinator
-
-_LOGGER = logging.getLogger(__name__)
 
 # Child lock is exposed only as a switch (control + state) to avoid switch/sensor sync issues.
 BINARY_SENSORS: list = []

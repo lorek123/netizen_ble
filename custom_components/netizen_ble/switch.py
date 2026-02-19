@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
@@ -14,8 +13,6 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import NetizenBLECoordinator
-
-_LOGGER = logging.getLogger(__name__)
 
 SWITCHES: list[SwitchEntityDescription] = [
     SwitchEntityDescription(key="manual_feed", translation_key="manual_feed", icon="mdi:food"),
