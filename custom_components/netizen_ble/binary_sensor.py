@@ -6,9 +6,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN
-from .coordinator import NetizenBLECoordinator
-
 # Child lock is exposed only as a switch (control + state) to avoid switch/sensor sync issues.
 BINARY_SENSORS: list = []
 
@@ -19,7 +16,6 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Netizen BLE binary sensors."""
-    coordinator: NetizenBLECoordinator = hass.data[DOMAIN][entry.entry_id]
     if not BINARY_SENSORS:
         async_add_entities([])
         return
