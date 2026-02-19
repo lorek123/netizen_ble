@@ -6,7 +6,7 @@ import logging
 
 import voluptuous as vol
 from bleak import BleakClient
-from bleak_retry_connector import establish_connection, get_device
+from bleak_retry_connector import device_source, establish_connection, get_device
 from homeassistant.components import bluetooth
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ADDRESS, CONF_DEVICE_ID, EVENT_HOMEASSISTANT_STOP, Platform
@@ -37,11 +37,36 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     verification_code = entry.data.get(CONF_VERIFICATION_CODE) or DEFAULT_VERIFICATION_CODE
     device_type = entry.data.get(CONF_DEVICE_TYPE)
 
-    ble_device = bluetooth.async_ble_device_from_address(hass, address, True)
+    # Prefer a local Bluetooth adapter over ESPHome proxies: the feeder's
+    # firmware is incompatible with the ESPHome proxy's ESP32 BLE stack
+    # (start_notify causes the device to disconnect with HCI error 19).
+    # Iterate all discovered service infos for this address and pick one
+    # from a local adapter (device_source returns None for local adapters).
+    ble_device = None
+    for service_info in bluetooth.async_discovered_service_info(hass, connectable=True):
+        if service_info.address.upper() != address:
+            continue
+        if not device_source(service_info.device):
+            ble_device = service_info.device
+            _LOGGER.debug("Using local adapter for %s", address)
+            break
+        if ble_device is None:
+            ble_device = service_info.device  # keep first found as fallback
+
+    if ble_device is None:
+        ble_device = bluetooth.async_ble_device_from_address(hass, address, True)
     if ble_device is None:
         ble_device = await get_device(address)
     if ble_device is None:
         raise ConfigEntryNotReady(f"BLE device {address} not found by any scanner")
+
+    if device_source(ble_device):
+        _LOGGER.warning(
+            "No local adapter found for %s, falling back to proxy %s — "
+            "connection may fail; add a local Bluetooth adapter for reliability",
+            address,
+            device_source(ble_device),
+        )
 
     ble_client = await establish_connection(BleakClient, ble_device, entry.title)
 
