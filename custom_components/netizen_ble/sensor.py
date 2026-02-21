@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from typing import Any
 
-from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
+import homeassistant.util.dt as dt_util
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
@@ -21,11 +23,53 @@ SENSORS: list[SensorEntityDescription] = [
         icon="mdi:calendar-clock",
     ),
     SensorEntityDescription(
+        key="next_feeding",
+        translation_key="next_feeding",
+        icon="mdi:food-drumstick-outline",
+        device_class=SensorDeviceClass.TIMESTAMP,
+    ),
+    SensorEntityDescription(
         key="firmware_version",
         translation_key="firmware_version",
         icon="mdi:chip",
     ),
 ]
+
+_WEEKDAY_MAP = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
+
+
+def _next_feeding(slots: list[dict]) -> tuple[datetime | None, dict | None]:
+    """Return (next_datetime, slot) for the earliest upcoming enabled feeding."""
+    now = dt_util.now()
+    best_dt: datetime | None = None
+    best_slot: dict | None = None
+
+    for day_offset in range(8):  # today + 7 days ahead
+        check_dt = now + timedelta(days=day_offset)
+        check_weekday = check_dt.weekday()  # 0=Mon … 6=Sun
+
+        for slot in slots:
+            if not slot.get("enabled", True):
+                continue
+            weekdays = slot.get("weekdays") or []
+            slot_weekdays = {_WEEKDAY_MAP.get(d.lower(), -1) for d in weekdays}
+            if check_weekday not in slot_weekdays:
+                continue
+
+            time_str = slot.get("time", "00:00")
+            try:
+                hour, minute = (int(x) for x in time_str.split(":"))
+            except (ValueError, AttributeError):
+                continue
+
+            candidate = check_dt.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            if candidate <= now:
+                continue
+            if best_dt is None or candidate < best_dt:
+                best_dt = candidate
+                best_slot = slot
+
+    return best_dt, best_slot
 
 
 async def async_setup_entry(
@@ -47,7 +91,7 @@ async def async_setup_entry(
 
 
 class NetizenBLESensor(CoordinatorEntity[NetizenBLECoordinator], SensorEntity):
-    """Netizen BLE sensor (feed plan slot count)."""
+    """Netizen BLE sensor."""
 
     def __init__(
         self,
@@ -67,11 +111,15 @@ class NetizenBLESensor(CoordinatorEntity[NetizenBLECoordinator], SensorEntity):
         return self.coordinator.connected
 
     @property
-    def native_value(self) -> str | int | None:
+    def native_value(self) -> str | int | datetime | None:
         data = self.coordinator.data or {}
         if self.entity_description.key == "feed_plan":
             slots = data.get("feed_plan_slots") or []
             return len(slots)
+        if self.entity_description.key == "next_feeding":
+            slots = data.get("feed_plan_slots") or []
+            next_dt, _ = _next_feeding(slots)
+            return next_dt
         if self.entity_description.key == "firmware_version":
             return data.get("device_version") or None
         return None
@@ -83,6 +131,13 @@ class NetizenBLESensor(CoordinatorEntity[NetizenBLECoordinator], SensorEntity):
         attrs: dict[str, Any] = {}
         if self.entity_description.key == "feed_plan" and "feed_plan_slots" in data:
             attrs["slots"] = data["feed_plan_slots"]
+        if self.entity_description.key == "next_feeding":
+            slots = data.get("feed_plan_slots") or []
+            _, slot = _next_feeding(slots)
+            if slot:
+                attrs["portions"] = slot.get("portions", 1)
+                attrs["weekdays"] = slot.get("weekdays", [])
+                attrs["time"] = slot.get("time", "")
         if self.entity_description.key == "firmware_version" and data.get("device_name"):
             attrs["device_name"] = data["device_name"]
         return attrs
