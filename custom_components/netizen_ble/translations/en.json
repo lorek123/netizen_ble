@@ -34,6 +34,7 @@
     },
     "sensor": {
       "feed_plan": { "name": "Feed plan" },
+      "next_feeding": { "name": "Next feeding" },
       "firmware_version": { "name": "Firmware version" }
     },
     "binary_sensor": {
