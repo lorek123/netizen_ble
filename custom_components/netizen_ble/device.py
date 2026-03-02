@@ -23,6 +23,7 @@ class NetizenBLEDevice:
         address: str,
         verification_code: str = DEFAULT_VERIFICATION_CODE,
         device_type: str | None = None,
+        connection_factory: Any = None,
     ) -> None:
         self._address = (
             address.upper()
@@ -34,6 +35,7 @@ class NetizenBLEDevice:
             self._address,
             self._verification_code,
             device_type=device_type,
+            connection_factory=connection_factory,
         )
         self._state: dict[str, Any] = {}
         self._listeners: list[Callable[[dict[str, Any]], None]] = []
@@ -86,25 +88,8 @@ class NetizenBLEDevice:
             return False
 
     async def async_ensure_connected(self) -> bool:
-        """Reconnect if disconnected."""
-        if self._device.is_connected:
-            return True
-
-        async with self._lock:
-            if self._device.is_connected:
-                return True
-
-            _LOGGER.info("Feeder %s disconnected, reconnecting", self._address)
-            try:
-                ok = await self._device.connect()
-                if ok:
-                    _LOGGER.info("Reconnected to feeder %s", self._address)
-                else:
-                    _LOGGER.warning("Reconnection to %s failed", self._address)
-                return ok
-            except Exception as e:
-                _LOGGER.warning("Reconnection to %s failed: %s", self._address, e)
-                return False
+        """Reconnect if disconnected (delegates to library's ensure_connected)."""
+        return await self._device.ensure_connected()
 
     async def _fetch_device_info(self) -> None:
         """Query device name and firmware version from feeder."""

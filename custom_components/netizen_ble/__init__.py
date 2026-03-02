@@ -68,12 +68,36 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             device_source(ble_device),
         )
 
-    ble_client = await establish_connection(BleakClient, ble_device, entry.title)
+    entry_title = entry.title
+
+    async def _create_ble_connection() -> BleakClient:
+        """Obtain a fresh BleakClient via HA's Bluetooth stack.
+
+        Called by the library's ``ensure_connected()`` whenever the feeder
+        connection drops and needs to be re-established.
+        """
+        dev = None
+        for si in bluetooth.async_discovered_service_info(hass, connectable=True):
+            if si.address.upper() != address:
+                continue
+            if not device_source(si.device):
+                dev = si.device
+                break
+            if dev is None:
+                dev = si.device
+        if dev is None:
+            dev = bluetooth.async_ble_device_from_address(hass, address, True)
+        if dev is None:
+            raise RuntimeError(f"BLE device {address} not found by any scanner")
+        return await establish_connection(BleakClient, dev, entry_title)
+
+    ble_client = await establish_connection(BleakClient, ble_device, entry_title)
 
     device = NetizenBLEDevice(
         address,
         verification_code=verification_code,
         device_type=device_type,
+        connection_factory=_create_ble_connection,
     )
     if not await device.connect(ble_client=ble_client):
         await ble_client.disconnect()
