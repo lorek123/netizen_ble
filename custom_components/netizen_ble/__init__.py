@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 import voluptuous as vol
@@ -91,17 +92,34 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             raise RuntimeError(f"BLE device {address} not found by any scanner")
         return await establish_connection(BleakClient, dev, entry_title)
 
-    ble_client = await establish_connection(BleakClient, ble_device, entry_title)
-
     device = NetizenBLEDevice(
         address,
         verification_code=verification_code,
         device_type=device_type,
         connection_factory=_create_ble_connection,
     )
-    if not await device.connect(ble_client=ble_client):
-        await ble_client.disconnect()
-        raise ConfigEntryNotReady(f"Could not connect to feeder {address}")
+
+    max_setup_attempts = 3
+    for attempt in range(1, max_setup_attempts + 1):
+        ble_client = await establish_connection(BleakClient, ble_device, entry_title)
+        if await device.connect(ble_client=ble_client):
+            break
+        try:
+            await ble_client.disconnect()
+        except Exception:
+            pass
+        if attempt < max_setup_attempts:
+            _LOGGER.warning(
+                "Connection attempt %d/%d for %s failed, retrying in 5s",
+                attempt,
+                max_setup_attempts,
+                address,
+            )
+            await asyncio.sleep(5.0)
+        else:
+            raise ConfigEntryNotReady(
+                f"Could not connect to feeder {address} after {max_setup_attempts} attempts"
+            )
 
     coordinator = NetizenBLECoordinator(hass, device)
     await coordinator.async_config_entry_first_refresh()
