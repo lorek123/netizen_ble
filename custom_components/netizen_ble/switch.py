@@ -20,6 +20,15 @@ SWITCHES: list[SwitchEntityDescription] = [
     SwitchEntityDescription(
         key="prompt_sound", translation_key="prompt_sound", icon="mdi:volume-high"
     ),
+    SwitchEntityDescription(key="led", translation_key="led", icon="mdi:led-on"),
+    SwitchEntityDescription(
+        key="atmosphere_light", translation_key="atmosphere_light", icon="mdi:lightbulb"
+    ),
+    SwitchEntityDescription(key="auto_lock", translation_key="auto_lock", icon="mdi:lock-clock"),
+    SwitchEntityDescription(
+        key="do_not_disturb", translation_key="do_not_disturb", icon="mdi:bell-sleep"
+    ),
+    SwitchEntityDescription(key="long_ring", translation_key="long_ring", icon="mdi:bell-ring"),
 ]
 
 
@@ -68,38 +77,50 @@ class NetizenBLESwitch(CoordinatorEntity[NetizenBLECoordinator], SwitchEntity):
         return self.coordinator.connected
 
     def _state_key(self) -> str:
-        key = self.entity_description.key
-        if key == "child_lock":
-            return "child_lock"
-        if key == "prompt_sound":
-            return "prompt_sound"
-        return key
+        return self.entity_description.key
 
     @property
     def is_on(self) -> bool | None:
         if self._is_feed:
             return None  # momentary action
         data = self.coordinator.data or {}
-        return data.get(self._state_key())
+        key = self._state_key()
+        if key == "do_not_disturb":
+            return data.get("dnd_enabled")
+        return data.get(key)
+
+    async def _set_state(self, enabled: bool) -> None:
+        key = self._state_key()
+        if key == "child_lock":
+            await self._device.set_child_lock(enabled)
+        elif key == "prompt_sound":
+            await self._device.set_prompt_sound(enabled)
+        elif key == "led":
+            await self._device.set_led(enabled)
+        elif key == "atmosphere_light":
+            await self._device.set_atmosphere_light(enabled)
+        elif key == "auto_lock":
+            await self._device.set_auto_lock(enabled)
+        elif key == "do_not_disturb":
+            data = self.coordinator.data or {}
+            await self._device.set_do_not_disturb(
+                enabled,
+                start_time=data.get("dnd_start", "22:00"),
+                end_time=data.get("dnd_end", "08:00"),
+            )
+        elif key == "long_ring":
+            await self._device.set_long_ring(enabled)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         if self._is_feed:
             portions = getattr(self.coordinator, "_feed_portions", 1) or 1
             await self._device.trigger_feed(portions=portions)
             return
-        key = self._state_key()
-        if key == "child_lock":
-            await self._device.set_child_lock(True)
-        elif key == "prompt_sound":
-            await self._device.set_prompt_sound(True)
+        await self._set_state(True)
         self.coordinator.hass.async_create_task(self.coordinator.async_request_refresh())
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         if self._is_feed:
             return
-        key = self._state_key()
-        if key == "child_lock":
-            await self._device.set_child_lock(False)
-        elif key == "prompt_sound":
-            await self._device.set_prompt_sound(False)
+        await self._set_state(False)
         self.coordinator.hass.async_create_task(self.coordinator.async_request_refresh())

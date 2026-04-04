@@ -28,6 +28,11 @@ BUTTONS: list[ButtonEntityDescription] = [
         translation_key="sync_time",
         icon="mdi:clock-sync",
     ),
+    ButtonEntityDescription(
+        key="factory_reset",
+        translation_key="factory_reset",
+        icon="mdi:restore",
+    ),
 ]
 
 
@@ -77,5 +82,7 @@ class NetizenBLEButton(CoordinatorEntity[NetizenBLECoordinator], ButtonEntity):
             await self._device.query_feed_plan()
         elif self.entity_description.key == "sync_time":
             await self._device.sync_time()
+        elif self.entity_description.key == "factory_reset":
+            await self._device.factory_reset()
         # Refresh in background so the button returns immediately; state will update shortly
         self.coordinator.hass.async_create_task(self.coordinator.async_request_refresh())

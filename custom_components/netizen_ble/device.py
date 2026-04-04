@@ -128,29 +128,24 @@ class NetizenBLEDevice:
             _LOGGER.debug("Feed failed: %s", e)
             return False
 
-    async def set_child_lock(self, locked: bool) -> bool:
+    async def _set_bool_state(self, state_key: str, enabled: bool, setter) -> bool:
+        """Ensure-connected wrapper: call setter, update optimistic state on success."""
         await self.async_ensure_connected()
         try:
-            ok = await self._device.set_child_lock(locked)
+            ok = await setter
             if ok:
-                self._optimistic["child_lock"] = locked
+                self._optimistic[state_key] = enabled
                 self._notify_listeners()
             return ok
         except Exception as e:
-            _LOGGER.debug("Set child lock failed: %s", e)
+            _LOGGER.debug("Set %s failed: %s", state_key, e)
             return False
 
+    async def set_child_lock(self, locked: bool) -> bool:
+        return await self._set_bool_state("child_lock", locked, self._device.set_child_lock(locked))
+
     async def set_prompt_sound(self, on: bool) -> bool:
-        await self.async_ensure_connected()
-        try:
-            ok = await self._device.set_sound(on)
-            if ok:
-                self._optimistic["prompt_sound"] = on
-                self._notify_listeners()
-            return ok
-        except Exception as e:
-            _LOGGER.debug("Set sound failed: %s", e)
-            return False
+        return await self._set_bool_state("prompt_sound", on, self._device.set_sound(on))
 
     async def set_feed_plan(self, slots: list[dict]) -> bool:
         """Set feed schedule. slots: list of {weekdays, time, portions, enabled}."""
@@ -170,6 +165,44 @@ class NetizenBLEDevice:
             return await self._device.set_schedule(schedules)
         except Exception as e:
             _LOGGER.debug("Set schedule failed: %s", e)
+            return False
+
+    async def set_led(self, enabled: bool) -> bool:
+        return await self._set_bool_state("led", enabled, self._device.set_led(enabled))
+
+    async def set_auto_lock(self, enabled: bool) -> bool:
+        return await self._set_bool_state("auto_lock", enabled, self._device.set_auto_lock(enabled))
+
+    async def set_atmosphere_light(self, enabled: bool) -> bool:
+        return await self._set_bool_state(
+            "atmosphere_light", enabled, self._device.set_atmosphere_light(enabled)
+        )
+
+    async def set_long_ring(self, enabled: bool) -> bool:
+        return await self._set_bool_state("long_ring", enabled, self._device.set_long_ring(enabled))
+
+    async def set_do_not_disturb(
+        self, enabled: bool, start_time: str = "22:00", end_time: str = "08:00"
+    ) -> bool:
+        await self.async_ensure_connected()
+        try:
+            ok = await self._device.set_do_not_disturb(enabled, start_time, end_time)
+            if ok:
+                self._optimistic["dnd_enabled"] = enabled
+                self._optimistic["dnd_start"] = start_time
+                self._optimistic["dnd_end"] = end_time
+                self._notify_listeners()
+            return ok
+        except Exception as e:
+            _LOGGER.debug("Set DND failed: %s", e)
+            return False
+
+    async def factory_reset(self) -> bool:
+        await self.async_ensure_connected()
+        try:
+            return await self._device.factory_reset()
+        except Exception as e:
+            _LOGGER.debug("Factory reset failed: %s", e)
             return False
 
     async def query_status(self) -> None:
@@ -213,6 +246,36 @@ class NetizenBLEDevice:
                     self._optimistic.pop("prompt_sound", None)
             except Exception as e:
                 _LOGGER.debug("Query prompt sound failed: %s", e)
+
+            # Query new state: fault, feeding status, DND, LED, auto_lock, atmosphere_light, long_ring
+            try:
+                fault = await self._device.get_fault_status()
+                if fault is not None:
+                    self._state["fault_code"] = fault
+            except Exception as e:
+                _LOGGER.debug("Query fault status failed: %s", e)
+            try:
+                feeding = await self._device.get_feeding_status()
+                if feeding is not None:
+                    self._state["feeding_status"] = feeding
+            except Exception as e:
+                _LOGGER.debug("Query feeding status failed: %s", e)
+            try:
+                dnd = await self._device.get_do_not_disturb()
+                if dnd is not None:
+                    self._state["dnd_enabled"] = dnd["enabled"]
+                    self._state["dnd_start"] = dnd["start_time"]
+                    self._state["dnd_end"] = dnd["end_time"]
+                    self._optimistic.pop("dnd_enabled", None)
+                    self._optimistic.pop("dnd_start", None)
+                    self._optimistic.pop("dnd_end", None)
+            except Exception as e:
+                _LOGGER.debug("Query DND failed: %s", e)
+
+            last_feed = self._device.get_last_feed_result()
+            if last_feed is not None:
+                self._state["last_feed_result"] = last_feed
+
             self._notify_listeners()
 
     async def query_feed_plan(self) -> bool:

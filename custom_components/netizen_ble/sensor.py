@@ -33,6 +33,22 @@ SENSORS: list[SensorEntityDescription] = [
         translation_key="firmware_version",
         icon="mdi:chip",
     ),
+    SensorEntityDescription(
+        key="fault_status",
+        translation_key="fault_status",
+        icon="mdi:alert-circle-outline",
+    ),
+    SensorEntityDescription(
+        key="feeding_status",
+        translation_key="feeding_status",
+        icon="mdi:food-variant",
+    ),
+    SensorEntityDescription(
+        key="last_feed_time",
+        translation_key="last_feed_time",
+        icon="mdi:history",
+        device_class=SensorDeviceClass.TIMESTAMP,
+    ),
 ]
 
 _WEEKDAY_MAP = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
@@ -113,15 +129,35 @@ class NetizenBLESensor(CoordinatorEntity[NetizenBLECoordinator], SensorEntity):
     @property
     def native_value(self) -> str | int | datetime | None:
         data = self.coordinator.data or {}
-        if self.entity_description.key == "feed_plan":
+        key = self.entity_description.key
+        if key == "feed_plan":
             slots = data.get("feed_plan_slots") or []
             return len(slots)
-        if self.entity_description.key == "next_feeding":
+        if key == "next_feeding":
             slots = data.get("feed_plan_slots") or []
             next_dt, _ = _next_feeding(slots)
             return next_dt
-        if self.entity_description.key == "firmware_version":
+        if key == "firmware_version":
             return data.get("device_version") or None
+        if key == "fault_status":
+            code = data.get("fault_code")
+            if code is None:
+                return None
+            return "ok" if code == 0 else f"fault_{code}"
+        if key == "feeding_status":
+            return data.get("feeding_status") or None
+        if key == "last_feed_time":
+            result = data.get("last_feed_result")
+            if not result or not isinstance(result, dict):
+                return None
+            ts = result.get("timestamp")
+            if not ts:
+                return None
+            try:
+                naive = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+                return dt_util.as_local(naive)
+            except (ValueError, TypeError):
+                return None
         return None
 
     @property
@@ -129,15 +165,20 @@ class NetizenBLESensor(CoordinatorEntity[NetizenBLECoordinator], SensorEntity):
         """Expose schedule slots / device info in attributes."""
         data = self.coordinator.data or {}
         attrs: dict[str, Any] = {}
-        if self.entity_description.key == "feed_plan" and "feed_plan_slots" in data:
+        key = self.entity_description.key
+        if key == "feed_plan" and "feed_plan_slots" in data:
             attrs["slots"] = data["feed_plan_slots"]
-        if self.entity_description.key == "next_feeding":
+        if key == "next_feeding":
             slots = data.get("feed_plan_slots") or []
             _, slot = _next_feeding(slots)
             if slot:
                 attrs["portions"] = slot.get("portions", 1)
                 attrs["weekdays"] = slot.get("weekdays", [])
                 attrs["time"] = slot.get("time", "")
-        if self.entity_description.key == "firmware_version" and data.get("device_name"):
+        if key == "firmware_version" and data.get("device_name"):
             attrs["device_name"] = data["device_name"]
+        if key == "last_feed_time":
+            result = data.get("last_feed_result")
+            if isinstance(result, dict):
+                attrs.update({k: v for k, v in result.items() if k != "timestamp"})
         return attrs

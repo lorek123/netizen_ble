@@ -1,0 +1,79 @@
+# Home Assistant Automation: Restart ESP32 BLE proxy when feeder is unavailable
+#
+# The ESPHome Bluetooth proxy can get stuck after the feeder disconnects,
+# causing all subsequent connection attempts to fail with Error 19.
+# This automation detects the stuck state and power-cycles the proxy.
+#
+# SETUP:
+#   1. Replace entity IDs below with your actual entity IDs.
+#      Check Developer Tools > States to find the correct names.
+#   2. Copy this automation into your automations.yaml, or paste the
+#      content into the HA UI (Settings > Automations > Create > Edit as YAML).
+#
+# ENTITY IDS TO VERIFY:
+#   - sensor.YOUR_FEEDER_NAME_feed_plan  (any netizen_ble sensor entity)
+#   - button.YOUR_ESP32_PROXY_restart    (ESPHome device restart button)
+#   - The config_entry_id for netizen_ble (find in .storage/core.config_entries)
+
+alias: "Restart BLE proxy when pet feeder is unavailable"
+description: >-
+  When the pet feeder sensor stays unavailable for 5 minutes, restart the
+  ESP32 Bluetooth proxy to clear its stuck BLE state, then reload the
+  netizen_ble integration.
+mode: single
+max_exceeded: silent
+
+trigger:
+  - platform: state
+    # Use any netizen_ble sensor entity — they all share the same
+    # availability (coordinator.connected).
+    entity_id: sensor.YOUR_FEEDER_NAME_feed_plan
+    to: "unavailable"
+    for:
+      minutes: 5
+
+condition:
+  # Only run if the proxy device itself is available (i.e. ESPHome API is
+  # connected). If the proxy is offline, restarting it won't help.
+  - condition: not
+    conditions:
+      - condition: state
+        entity_id: button.YOUR_ESP32_PROXY_restart
+        state: "unavailable"
+
+action:
+  # 1. Restart the ESP32 BLE proxy
+  - service: button.press
+    target:
+      entity_id: button.YOUR_ESP32_PROXY_restart
+
+  # 2. Wait for the proxy to reboot and reconnect to HA
+  - delay:
+      seconds: 30
+
+  # 3. Reload the netizen_ble integration to force a fresh connection.
+  #    Use ONE of the two options below:
+
+  # Option A: Reload config entry by ID (preferred, more targeted).
+  #   Find your config_entry_id in Developer Tools > States or
+  #   .storage/core.config_entries — search for "netizen_ble".
+  #
+  # - service: homeassistant.reload_config_entry
+  #   data:
+  #     entry_id: "YOUR_CONFIG_ENTRY_ID"
+
+  # Option B: Reload all config entries for the integration.
+  #   Simpler but restarts everything under netizen_ble.
+  - service: homeassistant.reload_config_entry
+    data:
+      entry_id: all
+    target:
+      integration: netizen_ble
+
+  # 4. Log that the automation fired
+  - service: logbook.log
+    data:
+      name: "BLE Proxy Recovery"
+      message: >-
+        Restarted ESP32 BLE proxy and reloaded netizen_ble integration
+        because the pet feeder was unavailable for 5 minutes.

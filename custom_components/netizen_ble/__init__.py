@@ -25,6 +25,7 @@ PLATFORMS: list[Platform] = [
     Platform.SWITCH,
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
+    Platform.TIME,
 ]
 
 _LOGGER = logging.getLogger(__name__)
@@ -121,7 +122,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 f"Could not connect to feeder {address} after {max_setup_attempts} attempts"
             )
 
-    coordinator = NetizenBLECoordinator(hass, device)
+    coordinator = NetizenBLECoordinator(
+        hass,
+        device,
+        proxy_source_mac=device_source(ble_device),
+    )
     await coordinator.async_config_entry_first_refresh()
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
