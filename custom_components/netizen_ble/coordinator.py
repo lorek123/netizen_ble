@@ -100,15 +100,33 @@ class NetizenBLECoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # ------------------------------------------------------------------
 
     def _find_proxy_restart_entity(self) -> str | None:
-        """Look up the ESPHome restart button for the BLE proxy by MAC."""
+        """Look up the ESPHome restart button for the BLE proxy by MAC.
+
+        ``device_source()`` returns the ESP32's **BLE** MAC, but the HA device
+        registry stores the **WiFi** MAC.  On ESP32 the standard allocation is:
+        WiFi STA = base, WiFi AP = base+1, BLE = base+2.  We try the reported
+        MAC and the two lower offsets so the lookup succeeds regardless of
+        which interface MAC the registry recorded.
+        """
         if not self._proxy_source_mac:
             return None
+
+        ble_mac = self._proxy_source_mac.lower().replace("-", ":")
+        candidates = {ble_mac}
+        try:
+            parts = ble_mac.split(":")
+            last_octet = int(parts[-1], 16)
+            for offset in (1, 2):
+                derived = parts[:-1] + [f"{(last_octet - offset) & 0xFF:02x}"]
+                candidates.add(":".join(derived))
+        except (ValueError, IndexError):
+            pass
+
         dev_reg = dr.async_get(self.hass)
         ent_reg = er.async_get(self.hass)
-        target = self._proxy_source_mac.lower().replace("-", ":")
         for device in dev_reg.devices.values():
             for _conn_type, conn_id in device.connections:
-                if conn_id.lower().replace("-", ":") == target:
+                if conn_id.lower().replace("-", ":") in candidates:
                     for entity in er.async_entries_for_device(ent_reg, device.id):
                         if (
                             entity.domain == "button"
