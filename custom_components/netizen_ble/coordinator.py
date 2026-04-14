@@ -17,7 +17,7 @@ from .device import NetizenBLEDevice
 _LOGGER = logging.getLogger(__name__)
 
 POLL_INTERVAL = timedelta(seconds=60)
-PROXY_RESTART_FAILURE_THRESHOLD = 10
+PROXY_RESTART_FAILURE_THRESHOLD = 3
 PROXY_RESTART_COOLDOWN_S = 900
 
 
