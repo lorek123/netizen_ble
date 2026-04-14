@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 
 import voluptuous as vol
 from bleak import BleakClient
@@ -16,7 +17,7 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
 
 from .const import CONF_DEVICE_TYPE, CONF_VERIFICATION_CODE, DEFAULT_VERIFICATION_CODE, DOMAIN
-from .coordinator import NetizenBLECoordinator
+from .coordinator import PROXY_RESTART_COOLDOWN_S, NetizenBLECoordinator, find_proxy_restart_entity
 from .device import NetizenBLEDevice
 
 PLATFORMS: list[Platform] = [
@@ -118,6 +119,45 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
             await asyncio.sleep(5.0)
         else:
+            # All setup attempts exhausted.  If we're going through a proxy the
+            # ESP32 NimBLE stack may have gotten into a stuck state where CCCD
+            # writes always trigger HCI error 19.  Restarting the proxy clears
+            # this — but only once per cooldown period to avoid restart loops.
+            proxy_mac = device_source(ble_device)
+            if proxy_mac:
+                restart_timestamps: dict = hass.data.setdefault(
+                    f"{DOMAIN}_proxy_restart_timestamps", {}
+                )
+                now = time.monotonic()
+                last = restart_timestamps.get(proxy_mac, 0.0)
+                if (now - last) >= PROXY_RESTART_COOLDOWN_S:
+                    restart_entity = find_proxy_restart_entity(hass, proxy_mac)
+                    if restart_entity:
+                        _LOGGER.warning(
+                            "Restarting BLE proxy (%s) via %s — feeder %s "
+                            "unreachable after %d setup attempts",
+                            proxy_mac,
+                            restart_entity,
+                            address,
+                            max_setup_attempts,
+                        )
+                        try:
+                            await hass.services.async_call(
+                                "button",
+                                "press",
+                                {"entity_id": restart_entity},
+                                blocking=True,
+                            )
+                        except Exception as exc:
+                            _LOGGER.warning("Failed to restart BLE proxy: %s", exc)
+                    else:
+                        _LOGGER.warning(
+                            "Feeder %s unreachable — proxy restart button not found "
+                            "for %s; restart the proxy manually",
+                            address,
+                            proxy_mac,
+                        )
+                    restart_timestamps[proxy_mac] = now
             raise ConfigEntryNotReady(
                 f"Could not connect to feeder {address} after {max_setup_attempts} attempts"
             )

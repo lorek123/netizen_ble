@@ -21,6 +21,72 @@ PROXY_RESTART_FAILURE_THRESHOLD = 10
 PROXY_RESTART_COOLDOWN_S = 900
 
 
+def find_proxy_restart_entity(hass: HomeAssistant, proxy_source_mac: str | None) -> str | None:
+    """Look up the ESPHome restart button for the BLE proxy by MAC.
+
+    ``device_source()`` returns the ESP32's **BLE** MAC, but the HA device
+    registry stores the **WiFi** MAC.  On ESP32 the standard allocation is:
+    WiFi STA = base, WiFi AP = base+1, BLE = base+2.  We try the reported
+    MAC and the two lower offsets so the lookup succeeds regardless of
+    which interface MAC the registry recorded.
+
+    Two lookup strategies are attempted in order:
+    1. Device connections (dr.CONNECTION_NETWORK_MAC) — standard path.
+    2. ESPHome config entries by unique_id — fallback when connections are
+       not populated (e.g. older ESPHome HA integration versions).
+    """
+    if not proxy_source_mac:
+        return None
+
+    ble_mac = proxy_source_mac.lower().replace("-", ":")
+    candidates_colon = {ble_mac}
+    try:
+        parts = ble_mac.split(":")
+        last_octet = int(parts[-1], 16)
+        for offset in (1, 2):
+            derived = parts[:-1] + [f"{(last_octet - offset) & 0xFF:02x}"]
+            candidates_colon.add(":".join(derived))
+    except (ValueError, IndexError):
+        pass
+    candidates_plain = {c.replace(":", "") for c in candidates_colon}
+
+    dev_reg = dr.async_get(hass)
+    ent_reg = er.async_get(hass)
+
+    def _restart_button_for_device(device_id: str) -> str | None:
+        for entity in er.async_entries_for_device(ent_reg, device_id):
+            if (
+                entity.domain == "button"
+                and entity.entity_id.endswith("_restart")
+                and "safe_mode" not in entity.entity_id
+            ):
+                return entity.entity_id
+        return None
+
+    for device in dev_reg.devices.values():
+        for _conn_type, conn_id in device.connections:
+            if conn_id.lower().replace("-", ":") in candidates_colon:
+                result = _restart_button_for_device(device.id)
+                if result:
+                    return result
+
+    for entry in hass.config_entries.async_entries("esphome"):
+        uid = (entry.unique_id or "").replace(":", "").replace("-", "").lower()
+        if uid not in candidates_plain:
+            continue
+        for device in dr.async_entries_for_config_entry(dev_reg, entry.entry_id):
+            result = _restart_button_for_device(device.id)
+            if result:
+                return result
+
+    _LOGGER.debug(
+        "Proxy restart button not found for %s (candidates: %s)",
+        proxy_source_mac,
+        sorted(candidates_colon),
+    )
+    return None
+
+
 class NetizenBLECoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Coordinator for Netizen BLE device state."""
 
@@ -100,73 +166,7 @@ class NetizenBLECoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # ------------------------------------------------------------------
 
     def _find_proxy_restart_entity(self) -> str | None:
-        """Look up the ESPHome restart button for the BLE proxy by MAC.
-
-        ``device_source()`` returns the ESP32's **BLE** MAC, but the HA device
-        registry stores the **WiFi** MAC.  On ESP32 the standard allocation is:
-        WiFi STA = base, WiFi AP = base+1, BLE = base+2.  We try the reported
-        MAC and the two lower offsets so the lookup succeeds regardless of
-        which interface MAC the registry recorded.
-
-        Two lookup strategies are attempted in order:
-        1. Device connections (dr.CONNECTION_NETWORK_MAC) — standard path.
-        2. ESPHome config entries by unique_id — fallback when connections are
-           not populated (e.g. older ESPHome HA integration versions).
-        """
-        if not self._proxy_source_mac:
-            return None
-
-        ble_mac = self._proxy_source_mac.lower().replace("-", ":")
-        candidates_colon = {ble_mac}
-        try:
-            parts = ble_mac.split(":")
-            last_octet = int(parts[-1], 16)
-            for offset in (1, 2):
-                derived = parts[:-1] + [f"{(last_octet - offset) & 0xFF:02x}"]
-                candidates_colon.add(":".join(derived))
-        except (ValueError, IndexError):
-            pass
-        # Separator-stripped versions for ESPHome unique_id comparison
-        candidates_plain = {c.replace(":", "") for c in candidates_colon}
-
-        dev_reg = dr.async_get(self.hass)
-        ent_reg = er.async_get(self.hass)
-
-        def _restart_button_for_device(device_id: str) -> str | None:
-            for entity in er.async_entries_for_device(ent_reg, device_id):
-                if (
-                    entity.domain == "button"
-                    and entity.entity_id.endswith("_restart")
-                    and "safe_mode" not in entity.entity_id
-                ):
-                    return entity.entity_id
-            return None
-
-        # Strategy 1: look up by device connections (MAC address)
-        for device in dev_reg.devices.values():
-            for _conn_type, conn_id in device.connections:
-                if conn_id.lower().replace("-", ":") in candidates_colon:
-                    result = _restart_button_for_device(device.id)
-                    if result:
-                        return result
-
-        # Strategy 2: ESPHome config entries — unique_id is the WiFi MAC
-        # (without separators in older versions, with colons in newer ones).
-        for entry in self.hass.config_entries.async_entries("esphome"):
-            uid = (entry.unique_id or "").replace(":", "").replace("-", "").lower()
-            if uid not in candidates_plain:
-                continue
-            for device in dr.async_entries_for_config_entry(dev_reg, entry.entry_id):
-                result = _restart_button_for_device(device.id)
-                if result:
-                    return result
-
-        _LOGGER.debug(
-            "Proxy restart button not found for %s (candidates: %s)",
-            self._proxy_source_mac,
-            sorted(candidates_colon),
-        )
-        return None
+        return find_proxy_restart_entity(self.hass, self._proxy_source_mac)
 
     async def _try_restart_proxy(self) -> None:
         """Restart the ESP32 BLE proxy when the feeder is persistently unreachable."""
