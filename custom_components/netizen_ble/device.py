@@ -78,11 +78,7 @@ class NetizenBLEDevice:
 
     async def connect(self, ble_client=None) -> bool:
         try:
-            ok = await self._device.connect(ble_client=ble_client)
-            if ok:
-                await self._fetch_device_info()
-                await self.query_status()
-            return ok
+            return await self._device.connect(ble_client=ble_client)
         except Exception as e:
             _LOGGER.debug("Netizen BLE connect error: %s", e)
             return False
