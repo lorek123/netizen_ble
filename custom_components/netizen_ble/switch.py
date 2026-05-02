@@ -74,7 +74,7 @@ class NetizenBLESwitch(CoordinatorEntity[NetizenBLECoordinator], SwitchEntity):
 
     @property
     def available(self) -> bool:
-        return self.coordinator.connected
+        return self.coordinator.reachable
 
     def _state_key(self) -> str:
         return self.entity_description.key

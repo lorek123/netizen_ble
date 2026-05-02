@@ -72,7 +72,7 @@ class NetizenBLEButton(CoordinatorEntity[NetizenBLECoordinator], ButtonEntity):
 
     @property
     def available(self) -> bool:
-        return self.coordinator.connected
+        return self.coordinator.reachable
 
     async def async_press(self) -> None:
         if self.entity_description.key == "feed_now":

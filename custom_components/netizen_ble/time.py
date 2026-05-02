@@ -63,7 +63,7 @@ class NetizenBLETime(CoordinatorEntity[NetizenBLECoordinator], TimeEntity):
 
     @property
     def available(self) -> bool:
-        return self.coordinator.connected
+        return self.coordinator.reachable
 
     @property
     def native_value(self) -> time | None:

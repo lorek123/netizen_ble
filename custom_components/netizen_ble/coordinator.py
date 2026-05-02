@@ -120,6 +120,11 @@ class NetizenBLECoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def connected(self) -> bool:
         return self._device.is_connected
 
+    @property
+    def reachable(self) -> bool:
+        """True until the feeder has been consistently unreachable across multiple polls."""
+        return self._consecutive_failures < 10
+
     @callback
     def _on_device_state(self, state: dict[str, Any]) -> None:
         self.async_set_updated_data(state)
