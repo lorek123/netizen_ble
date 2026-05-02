@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
+from time import monotonic as _monotonic
 
 import voluptuous as vol
 from bleak import BleakClient
@@ -157,7 +157,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 restart_timestamps: dict = hass.data.setdefault(
                     f"{DOMAIN}_proxy_restart_timestamps", {}
                 )
-                now = time.monotonic()
+                now = _monotonic()
                 last = restart_timestamps.get(proxy_mac, 0.0)
                 if (now - last) >= PROXY_RESTART_COOLDOWN_S:
                     restart_entity = find_proxy_restart_entity(hass, proxy_mac)
