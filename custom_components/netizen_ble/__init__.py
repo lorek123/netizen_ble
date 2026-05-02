@@ -11,13 +11,27 @@ from bleak import BleakClient
 from bleak_retry_connector import device_source, establish_connection, get_device
 from homeassistant.components import bluetooth
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_ADDRESS, CONF_DEVICE_ID, EVENT_HOMEASSISTANT_STOP, Platform
+from homeassistant.const import (
+    CONF_ADDRESS,
+    CONF_DEVICE_ID,
+    EVENT_HOMEASSISTANT_STOP,
+    Platform,
+)
 from homeassistant.core import Event, HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
 
-from .const import CONF_DEVICE_TYPE, CONF_VERIFICATION_CODE, DEFAULT_VERIFICATION_CODE, DOMAIN
-from .coordinator import PROXY_RESTART_COOLDOWN_S, NetizenBLECoordinator, find_proxy_restart_entity
+from .const import (
+    CONF_DEVICE_TYPE,
+    CONF_VERIFICATION_CODE,
+    DEFAULT_VERIFICATION_CODE,
+    DOMAIN,
+)
+from .coordinator import (
+    PROXY_RESTART_COOLDOWN_S,
+    NetizenBLECoordinator,
+    find_proxy_restart_entity,
+)
 from .device import NetizenBLEDevice
 
 PLATFORMS: list[Platform] = [
@@ -103,13 +117,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     max_setup_attempts = 3
     for attempt in range(1, max_setup_attempts + 1):
-        ble_client = await establish_connection(BleakClient, ble_device, entry_title)
-        if await device.connect(ble_client=ble_client):
-            break
+        ble_client = None
         try:
-            await ble_client.disconnect()
-        except Exception:
-            pass
+            ble_client = await establish_connection(BleakClient, ble_device, entry_title)
+            if await device.connect(ble_client=ble_client):
+                break
+            try:
+                await ble_client.disconnect()
+            except Exception:
+                pass
+        except Exception as exc:
+            _LOGGER.debug(
+                "Connection attempt %d/%d for %s raised: %s",
+                attempt,
+                max_setup_attempts,
+                address,
+                exc,
+            )
+            if ble_client is not None:
+                try:
+                    await ble_client.disconnect()
+                except Exception:
+                    pass
         if attempt < max_setup_attempts:
             _LOGGER.warning(
                 "Connection attempt %d/%d for %s failed, retrying in 5s",
