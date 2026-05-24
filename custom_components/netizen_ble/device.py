@@ -204,6 +204,9 @@ class NetizenBLEDevice:
     async def query_status(self) -> None:
         """Query schedule and update state."""
         async with self._lock:
+            if "device_version" not in self._state:
+                await self._fetch_device_info()
+
             try:
                 raw = await self._device.query_schedule()
                 # Library returns list of dicts; normalize to feed_plan_slots format
