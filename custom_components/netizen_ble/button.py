@@ -50,7 +50,10 @@ async def async_setup_entry(
         "manufacturer": "Pet Netizen",
         "model": device.get_state("device_name") or "Feeder",
     }
-    entities = [NetizenBLEButton(coordinator, device_info, desc) for desc in BUTTONS]
+    is_tc02 = device.device_type == "tc02"
+    feeder_only = {"feed_now", "query_feed_plan"}
+    active = [desc for desc in BUTTONS if not (is_tc02 and desc.key in feeder_only)]
+    entities = [NetizenBLEButton(coordinator, device_info, desc) for desc in active]
     async_add_entities(entities)
 
 

@@ -268,6 +268,28 @@ class NetizenBLEDevice:
             except Exception as e:
                 _LOGGER.debug("Query DND failed: %s", e)
 
+            try:
+                battery = await self._device.get_battery_level()
+                if battery is not None:
+                    self._state["battery_level"] = battery
+                    self._optimistic.pop("battery_level", None)
+            except Exception as e:
+                _LOGGER.debug("Query battery level failed: %s", e)
+
+            if self.device_type == "cp01b":
+                try:
+                    cp01b = await self._device.get_cp01b_state()
+                    self._state.update(cp01b)
+                except Exception as e:
+                    _LOGGER.debug("Query CP01B state failed: %s", e)
+
+            if self.device_type == "tc02":
+                try:
+                    tc02 = await self._device.get_tc02_state()
+                    self._state.update(tc02)
+                except Exception as e:
+                    _LOGGER.debug("Query TC02 state failed: %s", e)
+
             last_feed = self._device.get_last_feed_result()
             if last_feed is not None:
                 self._state["last_feed_result"] = last_feed
@@ -278,6 +300,111 @@ class NetizenBLEDevice:
         """Request schedule refresh."""
         await self.query_status()
         return True
+
+    # ------------------------------------------------------------------
+    # CP01B setters
+    # ------------------------------------------------------------------
+
+    async def _set_cp01b(self, key: str, coro) -> bool:
+        await self.async_ensure_connected()
+        try:
+            ok = await coro
+            if ok:
+                self._notify_listeners()
+            return ok
+        except Exception as e:
+            _LOGGER.debug("Set CP01B %s failed: %s", key, e)
+            return False
+
+    async def set_cp01b_operation_mode(self, value: int) -> bool:
+        return await self._set_cp01b("operation_mode", self._device.set_cp01b_operation_mode(value))
+
+    async def set_cp01b_rotation_mode(self, value: int) -> bool:
+        return await self._set_cp01b("rotation_mode", self._device.set_cp01b_rotation_mode(value))
+
+    async def set_cp01b_volume(self, value: int) -> bool:
+        return await self._set_cp01b("volume", self._device.set_cp01b_volume(value))
+
+    async def set_cp01b_playback_frequency(self, value: int) -> bool:
+        return await self._set_cp01b(
+            "playback_frequency", self._device.set_cp01b_playback_frequency(value)
+        )
+
+    async def set_cp01b_sound_effect(self, value: int) -> bool:
+        return await self._set_cp01b("sound_effect", self._device.set_cp01b_sound_effect(value))
+
+    async def set_cp01b_auto_mode_countdown(self, value: int) -> bool:
+        return await self._set_cp01b(
+            "auto_mode_countdown", self._device.set_cp01b_auto_mode_countdown(value)
+        )
+
+    async def set_cp01b_prompt_sound(self, enabled: bool) -> bool:
+        return await self._set_cp01b(
+            "cp01b_prompt_sound", self._device.set_cp01b_prompt_sound(enabled)
+        )
+
+    async def set_cp01b_fun_mode(self, value: int) -> bool:
+        return await self._set_cp01b("fun_mode", self._device.set_cp01b_fun_mode(value))
+
+    # ------------------------------------------------------------------
+    # TC02 (Du-TC02 laser cat teaser) setters
+    # ------------------------------------------------------------------
+
+    async def _set_tc02(self, key: str, coro) -> bool:
+        await self.async_ensure_connected()
+        try:
+            ok = await coro
+            if ok:
+                self._notify_listeners()
+            return ok
+        except Exception as e:
+            _LOGGER.debug("Set TC02 %s failed: %s", key, e)
+            return False
+
+    async def set_tc02_operation_mode(self, value: int) -> bool:
+        return await self._set_tc02(
+            "tc02_operation_mode", self._device.set_tc02_operation_mode(value)
+        )
+
+    async def set_tc02_rotation_mode(self, value: int) -> bool:
+        return await self._set_tc02(
+            "tc02_rotation_mode", self._device.set_tc02_rotation_mode(value)
+        )
+
+    async def set_tc02_color_rgb(self, r: int, g: int, b: int) -> bool:
+        return await self._set_tc02("tc02_color_rgb", self._device.set_tc02_color_rgb(r, g, b))
+
+    async def set_tc02_mood_light_mode(self, value: int) -> bool:
+        return await self._set_tc02(
+            "tc02_mood_light_mode", self._device.set_tc02_mood_light_mode(value)
+        )
+
+    async def set_tc02_led_color(self, value: int) -> bool:
+        return await self._set_tc02("tc02_led_color", self._device.set_tc02_led_color(value))
+
+    async def set_tc02_sound_effect(self, value: int) -> bool:
+        return await self._set_tc02("tc02_sound_effect", self._device.set_tc02_sound_effect(value))
+
+    async def set_tc02_playback_frequency(self, value: int) -> bool:
+        return await self._set_tc02(
+            "tc02_playback_frequency", self._device.set_tc02_playback_frequency(value)
+        )
+
+    async def set_tc02_volume(self, value: int) -> bool:
+        return await self._set_tc02("tc02_volume", self._device.set_tc02_volume(value))
+
+    async def set_tc02_auto_mode_countdown(self, value: int) -> bool:
+        return await self._set_tc02(
+            "tc02_auto_mode_countdown", self._device.set_tc02_auto_mode_countdown(value)
+        )
+
+    @property
+    def device_type(self) -> str:
+        """Return the protocol-level device type (standard, jk, ali, cp01b, …)."""
+        try:
+            return self._device._protocol.device_type
+        except AttributeError:
+            return "standard"
 
     def device_type_hint(self) -> str:
         """This wrapper is feeder-only."""

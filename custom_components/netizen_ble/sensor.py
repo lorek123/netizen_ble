@@ -6,7 +6,12 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import homeassistant.util.dt as dt_util
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorEntityDescription
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorEntityDescription,
+    SensorStateClass,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
@@ -17,6 +22,14 @@ from .const import DOMAIN
 from .coordinator import NetizenBLECoordinator
 
 SENSORS: list[SensorEntityDescription] = [
+    SensorEntityDescription(
+        key="battery_level",
+        translation_key="battery_level",
+        icon="mdi:battery",
+        device_class=SensorDeviceClass.BATTERY,
+        native_unit_of_measurement="%",
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
     SensorEntityDescription(
         key="feed_plan",
         translation_key="feed_plan",
@@ -50,6 +63,18 @@ SENSORS: list[SensorEntityDescription] = [
         device_class=SensorDeviceClass.TIMESTAMP,
     ),
 ]
+
+TC02_SENSORS: list[SensorEntityDescription] = [
+    SensorEntityDescription(
+        key="tc02_auto_countdown_remaining",
+        translation_key="tc02_auto_countdown_remaining",
+        icon="mdi:timer-sand",
+        native_unit_of_measurement="min",
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+]
+
+_FEEDER_ONLY_SENSORS = {"feed_plan", "next_feeding", "feeding_status", "last_feed_time"}
 
 _WEEKDAY_MAP = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
 
@@ -102,7 +127,11 @@ async def async_setup_entry(
         "manufacturer": "Pet Netizen",
         "model": device.get_state("device_name") or "Feeder",
     }
-    entities = [NetizenBLESensor(coordinator, device_info, desc) for desc in SENSORS]
+    is_tc02 = device.device_type == "tc02"
+    active = [desc for desc in SENSORS if not (is_tc02 and desc.key in _FEEDER_ONLY_SENSORS)]
+    if is_tc02:
+        active += TC02_SENSORS
+    entities = [NetizenBLESensor(coordinator, device_info, desc) for desc in active]
     async_add_entities(entities)
 
 
@@ -158,7 +187,10 @@ class NetizenBLESensor(CoordinatorEntity[NetizenBLECoordinator], SensorEntity):
                 return dt_util.as_local(naive)
             except (ValueError, TypeError):
                 return None
-        return None
+        if key == "tc02_auto_countdown_remaining":
+            v = data.get("tc02_auto_countdown_remaining")
+            return int(v) if v is not None else None
+        return data.get(key)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

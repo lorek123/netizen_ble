@@ -31,6 +31,12 @@ SWITCHES: list[SwitchEntityDescription] = [
     SwitchEntityDescription(key="long_ring", translation_key="long_ring", icon="mdi:bell-ring"),
 ]
 
+CP01B_SWITCHES: list[SwitchEntityDescription] = [
+    SwitchEntityDescription(
+        key="cp01b_sound", translation_key="cp01b_sound", icon="mdi:volume-medium"
+    ),
+]
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -46,9 +52,14 @@ async def async_setup_entry(
         "manufacturer": "Pet Netizen",
         "model": device.get_state("device_name") or "Feeder",
     }
+    is_tc02 = device.device_type == "tc02"
+    feeder_only = {"manual_feed"}
+    active = [desc for desc in SWITCHES if not (is_tc02 and desc.key in feeder_only)]
+    if device.device_type == "cp01b":
+        active += CP01B_SWITCHES
     entities = [
         NetizenBLESwitch(coordinator, device_info, desc, is_feed=(desc.key == "manual_feed"))
-        for desc in SWITCHES
+        for desc in active
     ]
     async_add_entities(entities)
 
@@ -87,6 +98,8 @@ class NetizenBLESwitch(CoordinatorEntity[NetizenBLECoordinator], SwitchEntity):
         key = self._state_key()
         if key == "do_not_disturb":
             return data.get("dnd_enabled")
+        if key == "cp01b_sound":
+            return data.get("cp01b_prompt_sound")
         return data.get(key)
 
     async def _set_state(self, enabled: bool) -> None:
@@ -110,6 +123,8 @@ class NetizenBLESwitch(CoordinatorEntity[NetizenBLECoordinator], SwitchEntity):
             )
         elif key == "long_ring":
             await self._device.set_long_ring(enabled)
+        elif key == "cp01b_sound":
+            await self._device.set_cp01b_prompt_sound(enabled)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         if self._is_feed:

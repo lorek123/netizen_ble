@@ -25,7 +25,7 @@ def _is_netizen_device(info: BluetoothServiceInfoBleak) -> bool:
 
 
 def _detect_device_type_from_name(name: str | None) -> str:
-    """Return device type for protocol: standard, jk, or ali."""
+    """Return device type for protocol: standard, jk, ali, or cp01b."""
     if not name or not name.strip():
         return "standard"
     name_upper = name.strip().upper()
@@ -33,6 +33,12 @@ def _detect_device_type_from_name(name: str | None) -> str:
         return "jk"
     if "ALI" in name_upper or "ALIBABA" in name_upper:
         return "ali"
+    if "CP01B" in name_upper:
+        return "cp01b"
+    if "F14B" in name_upper:
+        return "f14b"
+    if "TC02" in name_upper:
+        return "tc02"
     return "standard"
 
 
