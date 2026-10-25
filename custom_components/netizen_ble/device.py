@@ -83,6 +83,10 @@ class NetizenBLEDevice:
             _LOGGER.debug("Netizen BLE connect error: %s", e)
             return False
 
+    def disconnected_callback(self, client: Any) -> None:
+        """Bleak disconnected_callback; logs when the feeder drops the link."""
+        self._device.disconnected_callback(client)
+
     async def async_ensure_connected(self) -> bool:
         """Reconnect if disconnected (delegates to library's ensure_connected)."""
         return await self._device.ensure_connected()

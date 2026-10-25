@@ -135,8 +135,23 @@ The **verification code** defaults to `00000000` — leave it unless you set a c
 
 ## BLE proxy (remote feeders)
 
-If your feeder is out of direct Bluetooth range of the HA server, use an **ESPHome BLE proxy** (ESP32).
-The integration automatically restarts the proxy ESP32 if the feeder becomes persistently unreachable.
+A **local Bluetooth adapter is strongly recommended.** The feeder's firmware disconnects when
+notifications are enabled through an ESPHome Bluetooth proxy (`BluetoothGATTErrorResponse:
+Unknown error (19)` during `start_notify`); restarting the proxy does not help.
+
+If both a local adapter and an *active* ESPHome proxy can hear the feeder, Home Assistant picks
+the connection path for every connection by signal strength and free slots. The integration
+cannot pin it to the local adapter (there is no supported API for that), so the proxy may be
+chosen and the connection will fail. Make the proxy **passive** so it keeps forwarding
+advertisements but never connects:
+
+```yaml
+bluetooth_proxy:
+  active: false
+```
+
+The integration logs a warning when a connection is routed through a proxy even though a local
+adapter can reach the feeder.
 
 ## Protocol
 

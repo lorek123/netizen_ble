@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
-from time import monotonic as _monotonic
 
 import voluptuous as vol
 from bleak import BleakClient
-from bleak_retry_connector import device_source, establish_connection, get_device
+from bleak.backends import BleakBackend
+from bleak_retry_connector import device_source, establish_connection
 from homeassistant.components import bluetooth
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
@@ -27,11 +26,7 @@ from .const import (
     DEFAULT_VERIFICATION_CODE,
     DOMAIN,
 )
-from .coordinator import (
-    PROXY_RESTART_COOLDOWN_S,
-    NetizenBLECoordinator,
-    find_proxy_restart_entity,
-)
+from .coordinator import NetizenBLECoordinator
 from .device import NetizenBLEDevice
 
 PLATFORMS: list[Platform] = [
@@ -46,6 +41,16 @@ PLATFORMS: list[Platform] = [
 _LOGGER = logging.getLogger(__name__)
 
 
+def _local_adapter_sees(hass: HomeAssistant, address: str) -> bool:
+    """Return True if a local (non-proxy) adapter currently hears the feeder."""
+    return any(
+        not device_source(scanner_device.ble_device)
+        for scanner_device in bluetooth.async_scanner_devices_by_address(
+            hass, address, connectable=True
+        )
+    )
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Netizen BLE from a config entry (feeder via petnetizen_feeder)."""
     address = entry.data[CONF_ADDRESS].upper().replace("-", ":")
@@ -54,59 +59,58 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     verification_code = entry.data.get(CONF_VERIFICATION_CODE) or DEFAULT_VERIFICATION_CODE
     device_type = entry.data.get(CONF_DEVICE_TYPE)
 
-    # Prefer a local Bluetooth adapter over ESPHome proxies: the feeder's
-    # firmware is incompatible with the ESPHome proxy's ESP32 BLE stack
-    # (start_notify causes the device to disconnect with HCI error 19).
-    # Iterate all discovered service infos for this address and pick one
-    # from a local adapter (device_source returns None for local adapters).
-    ble_device = None
-    for service_info in bluetooth.async_discovered_service_info(hass, connectable=True):
-        if service_info.address.upper() != address:
-            continue
-        if not device_source(service_info.device):
-            ble_device = service_info.device
-            _LOGGER.debug("Using local adapter for %s", address)
-            break
-        if ble_device is None:
-            ble_device = service_info.device  # keep first found as fallback
-
-    if ble_device is None:
-        ble_device = bluetooth.async_ble_device_from_address(hass, address, True)
-    if ble_device is None:
-        ble_device = await get_device(address)
-    if ble_device is None:
+    if bluetooth.async_ble_device_from_address(hass, address, True) is None:
         raise ConfigEntryNotReady(f"BLE device {address} not found by any scanner")
 
-    if device_source(ble_device):
+    if not _local_adapter_sees(hass, address):
         _LOGGER.warning(
-            "No local adapter found for %s, falling back to proxy %s — "
-            "connection may fail; add a local Bluetooth adapter for reliability",
+            "Feeder %s is only reachable through a Bluetooth proxy; this "
+            "feeder's firmware usually rejects connections made through "
+            "ESPHome proxies — add a local Bluetooth adapter for reliability",
             address,
-            device_source(ble_device),
         )
 
     entry_title = entry.title
+    proxy_warned = False
 
     async def _create_ble_connection() -> BleakClient:
         """Obtain a fresh BleakClient via HA's Bluetooth stack.
 
-        Called by the library's ``ensure_connected()`` whenever the feeder
-        connection drops and needs to be re-established.
+        HA picks the connection path itself (by RSSI and slot availability
+        across all connectable scanners); the BLEDevice passed here does not
+        pin it to an adapter, and there is no supported API that does.
         """
-        dev = None
-        for si in bluetooth.async_discovered_service_info(hass, connectable=True):
-            if si.address.upper() != address:
-                continue
-            if not device_source(si.device):
-                dev = si.device
-                break
-            if dev is None:
-                dev = si.device
-        if dev is None:
-            dev = bluetooth.async_ble_device_from_address(hass, address, True)
+        nonlocal proxy_warned
+        dev = bluetooth.async_ble_device_from_address(hass, address, True)
         if dev is None:
             raise RuntimeError(f"BLE device {address} not found by any scanner")
-        return await establish_connection(BleakClient, dev, entry_title)
+        client = await establish_connection(
+            BleakClient,
+            dev,
+            entry_title,
+            disconnected_callback=device.disconnected_callback,
+            ble_device_callback=lambda: (
+                bluetooth.async_ble_device_from_address(hass, address, True) or dev
+            ),
+        )
+        backend_id = getattr(client, "backend_id", None)
+        if (
+            not proxy_warned
+            and backend_id
+            and not isinstance(backend_id, BleakBackend)
+            and _local_adapter_sees(hass, address)
+        ):
+            proxy_warned = True
+            _LOGGER.warning(
+                "Home Assistant routed the connection to feeder %s through a "
+                "Bluetooth proxy (%s) although a local adapter can reach it. "
+                "This feeder's firmware fails through ESPHome proxies; set the "
+                "proxy to passive (bluetooth_proxy: active: false) so HA keeps "
+                "using the local adapter",
+                address,
+                backend_id,
+            )
+        return client
 
     device = NetizenBLEDevice(
         address,
@@ -115,87 +119,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         connection_factory=_create_ble_connection,
     )
 
-    max_setup_attempts = 3
-    for attempt in range(1, max_setup_attempts + 1):
-        ble_client = None
-        try:
-            ble_client = await establish_connection(BleakClient, ble_device, entry_title)
-            if await device.connect(ble_client=ble_client):
-                break
-            try:
-                await ble_client.disconnect()
-            except Exception:
-                pass
-        except Exception as exc:
-            _LOGGER.debug(
-                "Connection attempt %d/%d for %s raised: %s",
-                attempt,
-                max_setup_attempts,
-                address,
-                exc,
-            )
-            if ble_client is not None:
-                try:
-                    await ble_client.disconnect()
-                except Exception:
-                    pass
-        if attempt < max_setup_attempts:
-            _LOGGER.warning(
-                "Connection attempt %d/%d for %s failed, retrying in 5s",
-                attempt,
-                max_setup_attempts,
-                address,
-            )
-            await asyncio.sleep(5.0)
-        else:
-            # All setup attempts exhausted.  If we're going through a proxy the
-            # ESP32 NimBLE stack may have gotten into a stuck state where CCCD
-            # writes always trigger HCI error 19.  Restarting the proxy clears
-            # this — but only once per cooldown period to avoid restart loops.
-            proxy_mac = device_source(ble_device)
-            if proxy_mac:
-                restart_timestamps: dict = hass.data.setdefault(
-                    f"{DOMAIN}_proxy_restart_timestamps", {}
-                )
-                now = _monotonic()
-                last = restart_timestamps.get(proxy_mac, 0.0)
-                if (now - last) >= PROXY_RESTART_COOLDOWN_S:
-                    restart_entity = find_proxy_restart_entity(hass, proxy_mac)
-                    if restart_entity:
-                        _LOGGER.warning(
-                            "Restarting BLE proxy (%s) via %s — feeder %s "
-                            "unreachable after %d setup attempts",
-                            proxy_mac,
-                            restart_entity,
-                            address,
-                            max_setup_attempts,
-                        )
-                        try:
-                            await hass.services.async_call(
-                                "button",
-                                "press",
-                                {"entity_id": restart_entity},
-                                blocking=True,
-                            )
-                        except Exception as exc:
-                            _LOGGER.warning("Failed to restart BLE proxy: %s", exc)
-                    else:
-                        _LOGGER.warning(
-                            "Feeder %s unreachable — proxy restart button not found "
-                            "for %s; restart the proxy manually",
-                            address,
-                            proxy_mac,
-                        )
-                    restart_timestamps[proxy_mac] = now
-            raise ConfigEntryNotReady(
-                f"Could not connect to feeder {address} after {max_setup_attempts} attempts"
-            )
+    # The library retries early link drops itself; HA retries setup on top.
+    if not await device.connect():
+        # Release a half-open link so a proxy does not leak the slot.
+        await device.disconnect()
+        raise ConfigEntryNotReady(f"Could not connect to feeder {address}")
 
-    coordinator = NetizenBLECoordinator(
-        hass,
-        device,
-        proxy_source_mac=device_source(ble_device),
-    )
+    coordinator = NetizenBLECoordinator(hass, device)
     await coordinator.async_config_entry_first_refresh()
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
