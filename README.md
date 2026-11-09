@@ -135,23 +135,21 @@ The **verification code** defaults to `00000000` — leave it unless you set a c
 
 ## BLE proxy (remote feeders)
 
-A **local Bluetooth adapter is strongly recommended.** The feeder's firmware disconnects when
-notifications are enabled through an ESPHome Bluetooth proxy (`BluetoothGATTErrorResponse:
-Unknown error (19)` during `start_notify`); restarting the proxy does not help.
+ESPHome Bluetooth proxies work with **ESPHome 2026.10 or newer** (tested: 2026.10.0 on an
+ESP32-C6, with the proxy as the only connection path). Before that update, the same proxy failed
+every connection while enabling notifications (`BluetoothGATTErrorResponse: Unknown error (19)`
+during `start_notify`), so if you see that error, update the proxy's ESPHome first.
 
-If both a local adapter and an *active* ESPHome proxy can hear the feeder, Home Assistant picks
-the connection path for every connection by signal strength and free slots. The integration
-cannot pin it to the local adapter (there is no supported API for that), so the proxy may be
-chosen and the connection will fail. Make the proxy **passive** so it keeps forwarding
-advertisements but never connects:
+The proxy must be **active** to make connections:
 
 ```yaml
 bluetooth_proxy:
-  active: false
+  active: true
 ```
 
-The integration logs a warning when a connection is routed through a proxy even though a local
-adapter can reach the feeder.
+When both a local adapter and a proxy can hear the feeder, Home Assistant picks the path for
+each connection by signal strength and free slots. Enable debug logging for
+`custom_components.netizen_ble` to see which path each connection used.
 
 ## Protocol
 

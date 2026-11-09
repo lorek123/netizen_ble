@@ -6,8 +6,7 @@ import logging
 
 import voluptuous as vol
 from bleak import BleakClient
-from bleak.backends import BleakBackend
-from bleak_retry_connector import device_source, establish_connection
+from bleak_retry_connector import establish_connection
 from homeassistant.components import bluetooth
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
@@ -41,16 +40,6 @@ PLATFORMS: list[Platform] = [
 _LOGGER = logging.getLogger(__name__)
 
 
-def _local_adapter_sees(hass: HomeAssistant, address: str) -> bool:
-    """Return True if a local (non-proxy) adapter currently hears the feeder."""
-    return any(
-        not device_source(scanner_device.ble_device)
-        for scanner_device in bluetooth.async_scanner_devices_by_address(
-            hass, address, connectable=True
-        )
-    )
-
-
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Netizen BLE from a config entry (feeder via petnetizen_feeder)."""
     address = entry.data[CONF_ADDRESS].upper().replace("-", ":")
@@ -62,16 +51,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if bluetooth.async_ble_device_from_address(hass, address, True) is None:
         raise ConfigEntryNotReady(f"BLE device {address} not found by any scanner")
 
-    if not _local_adapter_sees(hass, address):
-        _LOGGER.warning(
-            "Feeder %s is only reachable through a Bluetooth proxy; this "
-            "feeder's firmware usually rejects connections made through "
-            "ESPHome proxies — add a local Bluetooth adapter for reliability",
-            address,
-        )
-
     entry_title = entry.title
-    proxy_warned = False
 
     async def _create_ble_connection() -> BleakClient:
         """Obtain a fresh BleakClient via HA's Bluetooth stack.
@@ -80,7 +60,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         across all connectable scanners); the BLEDevice passed here does not
         pin it to an adapter, and there is no supported API that does.
         """
-        nonlocal proxy_warned
         dev = bluetooth.async_ble_device_from_address(hass, address, True)
         if dev is None:
             raise RuntimeError(f"BLE device {address} not found by any scanner")
@@ -93,23 +72,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 bluetooth.async_ble_device_from_address(hass, address, True) or dev
             ),
         )
-        backend_id = getattr(client, "backend_id", None)
-        if (
-            not proxy_warned
-            and backend_id
-            and not isinstance(backend_id, BleakBackend)
-            and _local_adapter_sees(hass, address)
-        ):
-            proxy_warned = True
-            _LOGGER.warning(
-                "Home Assistant routed the connection to feeder %s through a "
-                "Bluetooth proxy (%s) although a local adapter can reach it. "
-                "This feeder's firmware fails through ESPHome proxies; set the "
-                "proxy to passive (bluetooth_proxy: active: false) so HA keeps "
-                "using the local adapter",
-                address,
-                backend_id,
-            )
+        _LOGGER.debug("Connected to feeder %s via %s", address, getattr(client, "backend_id", "?"))
         return client
 
     device = NetizenBLEDevice(
@@ -119,7 +82,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         connection_factory=_create_ble_connection,
     )
 
-    # The library retries early link drops itself; HA retries setup on top.
+    # The library retries failed connection attempts itself; HA retries setup on top.
     if not await device.connect():
         # Release a half-open link so a proxy does not leak the slot.
         await device.disconnect()
