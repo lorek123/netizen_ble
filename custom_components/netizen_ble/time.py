@@ -42,7 +42,13 @@ async def async_setup_entry(
         "manufacturer": "Pet Netizen",
         "model": device.get_state("device_name") or "Feeder",
     }
-    async_add_entities([NetizenBLETime(coordinator, device_info, desc) for desc in TIME_ENTITIES])
+    async_add_entities(
+        [
+            NetizenBLETime(coordinator, device_info, desc)
+            for desc in TIME_ENTITIES
+            if device.supports(desc.key)
+        ]
+    )
 
 
 class NetizenBLETime(CoordinatorEntity[NetizenBLECoordinator], TimeEntity):

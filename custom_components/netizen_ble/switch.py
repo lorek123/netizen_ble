@@ -54,7 +54,11 @@ async def async_setup_entry(
     }
     is_tc02 = device.device_type == "tc02"
     feeder_only = {"manual_feed"}
-    active = [desc for desc in SWITCHES if not (is_tc02 and desc.key in feeder_only)]
+    active = [
+        desc
+        for desc in SWITCHES
+        if not (is_tc02 and desc.key in feeder_only) and device.supports(desc.key)
+    ]
     if device.device_type == "cp01b":
         active += CP01B_SWITCHES
     entities = [

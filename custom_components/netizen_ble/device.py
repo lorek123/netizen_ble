@@ -8,11 +8,28 @@ from collections.abc import Callable
 from typing import Any
 
 from petnetizen_feeder import FeederDevice as LibraryFeederDevice
-from petnetizen_feeder import FeedSchedule, Weekday
+from petnetizen_feeder import FeedSchedule, ModelFeatures, Weekday, model_features
 
 from .const import DEFAULT_VERIFICATION_CODE
 
 _LOGGER = logging.getLogger(__name__)
+
+# Entity/state key -> ModelFeatures field. Keys not listed are always supported.
+_FEATURE_FIELDS = {
+    "child_lock": "child_lock",
+    "prompt_sound": "prompt_sound",
+    "led": "indicator_light",
+    "auto_lock": "auto_lock",
+    "do_not_disturb": "do_not_disturb",
+    "dnd_start": "do_not_disturb",
+    "dnd_end": "do_not_disturb",
+    "atmosphere_light": "atmosphere_light",
+    "power_source": "power_source",
+    "low_battery": "power_source",
+    "battery_level": "battery_percentage",
+}
+# The app never exposes these for any known model.
+_NEVER_ON_KNOWN_MODELS = {"long_ring"}
 
 
 class NetizenBLEDevice:
@@ -24,6 +41,7 @@ class NetizenBLEDevice:
         verification_code: str = DEFAULT_VERIFICATION_CODE,
         device_type: str | None = None,
         connection_factory: Any = None,
+        ble_name: str | None = None,
     ) -> None:
         self._address = (
             address.upper()
@@ -37,6 +55,7 @@ class NetizenBLEDevice:
             device_type=device_type,
             connection_factory=connection_factory,
         )
+        self._ble_name = ble_name
         self._state: dict[str, Any] = {}
         self._listeners: list[Callable[[dict[str, Any]], None]] = []
         self._lock = asyncio.Lock()
@@ -53,6 +72,21 @@ class NetizenBLEDevice:
     @property
     def name(self) -> str:
         return self._state.get("device_name") or self._address
+
+    @property
+    def features(self) -> ModelFeatures | None:
+        """Model features from the advertised name, else the reported name; None if unknown."""
+        return model_features(self._ble_name) or model_features(self._state.get("device_name"))
+
+    def supports(self, key: str) -> bool:
+        """Whether this model has the feature behind an entity/state key (unknown model: all)."""
+        features = self.features
+        if features is None:
+            return True
+        if key in _NEVER_ON_KNOWN_MODELS:
+            return False
+        field = _FEATURE_FIELDS.get(key)
+        return field is None or getattr(features, field)
 
     def get_state(self, key: str, default: Any = None) -> Any:
         if key in self._optimistic:
@@ -235,20 +269,22 @@ class NetizenBLEDevice:
                 _LOGGER.debug("Query schedule failed: %s", e)
 
             # Query child lock and prompt sound so switches reflect device state
-            try:
-                child_lock = await self._device.get_child_lock_status()
-                if child_lock is not None:
-                    self._state["child_lock"] = child_lock
-                    self._optimistic.pop("child_lock", None)
-            except Exception as e:
-                _LOGGER.debug("Query child lock failed: %s", e)
-            try:
-                prompt_sound = await self._device.get_prompt_sound_status()
-                if prompt_sound is not None:
-                    self._state["prompt_sound"] = prompt_sound
-                    self._optimistic.pop("prompt_sound", None)
-            except Exception as e:
-                _LOGGER.debug("Query prompt sound failed: %s", e)
+            if self.supports("child_lock"):
+                try:
+                    child_lock = await self._device.get_child_lock_status()
+                    if child_lock is not None:
+                        self._state["child_lock"] = child_lock
+                        self._optimistic.pop("child_lock", None)
+                except Exception as e:
+                    _LOGGER.debug("Query child lock failed: %s", e)
+            if self.supports("prompt_sound"):
+                try:
+                    prompt_sound = await self._device.get_prompt_sound_status()
+                    if prompt_sound is not None:
+                        self._state["prompt_sound"] = prompt_sound
+                        self._optimistic.pop("prompt_sound", None)
+                except Exception as e:
+                    _LOGGER.debug("Query prompt sound failed: %s", e)
 
             # Query new state: fault, feeding status, DND, LED, auto_lock, atmosphere_light, long_ring
             try:
@@ -263,25 +299,34 @@ class NetizenBLEDevice:
                     self._state["feeding_status"] = feeding
             except Exception as e:
                 _LOGGER.debug("Query feeding status failed: %s", e)
-            try:
-                dnd = await self._device.get_do_not_disturb()
-                if dnd is not None:
-                    self._state["dnd_enabled"] = dnd["enabled"]
-                    self._state["dnd_start"] = dnd["start_time"]
-                    self._state["dnd_end"] = dnd["end_time"]
-                    self._optimistic.pop("dnd_enabled", None)
-                    self._optimistic.pop("dnd_start", None)
-                    self._optimistic.pop("dnd_end", None)
-            except Exception as e:
-                _LOGGER.debug("Query DND failed: %s", e)
+            if self.supports("power_source"):
+                try:
+                    power = await self._device.get_power_mode()
+                    if power is not None:
+                        self._state["power_mode"] = power
+                except Exception as e:
+                    _LOGGER.debug("Query power source failed: %s", e)
+            if self.supports("do_not_disturb"):
+                try:
+                    dnd = await self._device.get_do_not_disturb()
+                    if dnd is not None:
+                        self._state["dnd_enabled"] = dnd["enabled"]
+                        self._state["dnd_start"] = dnd["start_time"]
+                        self._state["dnd_end"] = dnd["end_time"]
+                        self._optimistic.pop("dnd_enabled", None)
+                        self._optimistic.pop("dnd_start", None)
+                        self._optimistic.pop("dnd_end", None)
+                except Exception as e:
+                    _LOGGER.debug("Query DND failed: %s", e)
 
-            try:
-                battery = await self._device.get_battery_level()
-                if battery is not None:
-                    self._state["battery_level"] = battery
-                    self._optimistic.pop("battery_level", None)
-            except Exception as e:
-                _LOGGER.debug("Query battery level failed: %s", e)
+            if self.supports("battery_level"):
+                try:
+                    battery = await self._device.get_battery_level()
+                    if battery is not None:
+                        self._state["battery_level"] = battery
+                        self._optimistic.pop("battery_level", None)
+                except Exception as e:
+                    _LOGGER.debug("Query battery level failed: %s", e)
 
             if self.device_type == "cp01b":
                 try:

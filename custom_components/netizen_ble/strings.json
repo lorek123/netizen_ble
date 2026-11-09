@@ -57,10 +57,18 @@
       "cp01b_sound": { "name": "Sound" }
     },
     "binary_sensor": {
-      "fault": { "name": "Fault" }
+      "fault": { "name": "Fault" },
+      "low_battery": { "name": "Low battery" },
+      "stuck_grain": { "name": "Food stuck" },
+      "food_blocked": { "name": "Food outlet blocked" },
+      "out_of_food": { "name": "Out of food" }
     },
     "sensor": {
       "battery_level": { "name": "Battery" },
+      "power_source": {
+        "name": "Power source",
+        "state": { "mains": "Mains", "battery": "Battery" }
+      },
       "feed_plan": { "name": "Feed plan" },
       "next_feeding": { "name": "Next feeding" },
       "firmware_version": { "name": "Firmware version" },

@@ -31,6 +31,13 @@ SENSORS: list[SensorEntityDescription] = [
         state_class=SensorStateClass.MEASUREMENT,
     ),
     SensorEntityDescription(
+        key="power_source",
+        translation_key="power_source",
+        icon="mdi:power-plug",
+        device_class=SensorDeviceClass.ENUM,
+        options=["mains", "battery"],
+    ),
+    SensorEntityDescription(
         key="feed_plan",
         translation_key="feed_plan",
         icon="mdi:calendar-clock",
@@ -128,7 +135,11 @@ async def async_setup_entry(
         "model": device.get_state("device_name") or "Feeder",
     }
     is_tc02 = device.device_type == "tc02"
-    active = [desc for desc in SENSORS if not (is_tc02 and desc.key in _FEEDER_ONLY_SENSORS)]
+    active = [
+        desc
+        for desc in SENSORS
+        if not (is_tc02 and desc.key in _FEEDER_ONLY_SENSORS) and device.supports(desc.key)
+    ]
     if is_tc02:
         active += TC02_SENSORS
     entities = [NetizenBLESensor(coordinator, device_info, desc) for desc in active]
@@ -173,6 +184,11 @@ class NetizenBLESensor(CoordinatorEntity[NetizenBLECoordinator], SensorEntity):
             if code is None:
                 return None
             return "ok" if code == 0 else f"fault_{code}"
+        if key == "power_source":
+            mode = data.get("power_mode")
+            if mode is None:
+                return None
+            return "battery" if mode == "Battery" else "mains"
         if key == "feeding_status":
             return data.get("feeding_status") or None
         if key == "last_feed_time":

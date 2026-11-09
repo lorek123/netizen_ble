@@ -29,6 +29,11 @@ Also works with `JK-`, `ALI-`, `PET-`, `FEED-` prefix devices using the same BLE
 
 ### All feeders
 
+Optional entities are created only for models that have the feature, using the same
+per-model feature list as the Pet Netizen app (matched by the advertised BLE name, e.g.
+`Du-W11B`). Unknown models get every entity. Entities for unsupported features are
+removed on startup.
+
 | Platform | Entity | Notes |
 |---|---|---|
 | `button` | Feed now | Triggers feed using the Portions value |
@@ -37,23 +42,25 @@ Also works with `JK-`, `ALI-`, `PET-`, `FEED-` prefix devices using the same BLE
 | `button` | Factory reset | |
 | `number` | Portions | 1–15, used by Feed now and Manual feed switch |
 | `switch` | Manual feed | Momentary trigger (same as Feed now button) |
-| `switch` | Child lock | |
-| `switch` | Prompt sound | Feeding reminder tone |
-| `switch` | LED indicator | |
-| `switch` | Atmosphere light | |
-| `switch` | Auto lock | |
-| `switch` | Do not disturb | |
-| `switch` | Long ring | |
-| `sensor` | Battery | % (where supported) |
+| `switch` | Child lock | Models with child lock |
+| `switch` | Prompt sound | Feeding reminder tone; models with it |
+| `switch` | LED indicator | Models with an indicator light |
+| `switch` | Atmosphere light | Du-F03B |
+| `switch` | Auto lock | DU-PD01B, Du-TC02 |
+| `switch` | Do not disturb | Du-F09B, Du-F16B |
+| `switch` | Long ring | Unknown models only (the app never shows it) |
+| `sensor` | Battery | % — DU-F14B, DU-CP01B |
+| `sensor` | Power source | Mains / battery; models with a battery |
 | `sensor` | Feed plan | Slot count; full schedule in attributes |
 | `sensor` | Next feeding | Timestamp of next scheduled feed |
 | `sensor` | Firmware version | |
 | `sensor` | Fault status | Text description of fault code |
 | `sensor` | Feeding status | |
 | `sensor` | Last feed time | Timestamp |
-| `binary_sensor` | Fault | `problem` class — use in automations |
-| `time` | Do not disturb start | |
-| `time` | Do not disturb end | |
+| `binary_sensor` | Fault | `problem` class — any fault |
+| `binary_sensor` | Food stuck / Food outlet blocked / Out of food | Individual fault bits |
+| `binary_sensor` | Low battery | Fault bit; only while on battery |
+| `time` | Do not disturb start / end | Models with do not disturb |
 
 ### DU-CP01B extras
 

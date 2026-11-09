@@ -18,6 +18,7 @@ from homeassistant.const import (
 from homeassistant.core import Event, HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 
 from .const import (
     CONF_DEVICE_TYPE,
@@ -40,6 +41,22 @@ PLATFORMS: list[Platform] = [
 _LOGGER = logging.getLogger(__name__)
 
 
+def _remove_unsupported_entities(
+    hass: HomeAssistant, entry: ConfigEntry, device: NetizenBLEDevice
+) -> None:
+    """Drop registry entries for features this feeder model does not have."""
+    features = device.features
+    if features is None:
+        return
+    ent_reg = er.async_get(hass)
+    prefix = f"{device.address}_"
+    for ent in er.async_entries_for_config_entry(ent_reg, entry.entry_id):
+        key = ent.unique_id.removeprefix(prefix)
+        if ent.unique_id.startswith(prefix) and not device.supports(key):
+            _LOGGER.debug("Removing %s: not supported by %s", ent.entity_id, features.model)
+            ent_reg.async_remove(ent.entity_id)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Netizen BLE from a config entry (feeder via petnetizen_feeder)."""
     address = entry.data[CONF_ADDRESS].upper().replace("-", ":")
@@ -48,7 +65,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     verification_code = entry.data.get(CONF_VERIFICATION_CODE) or DEFAULT_VERIFICATION_CODE
     device_type = entry.data.get(CONF_DEVICE_TYPE)
 
-    if bluetooth.async_ble_device_from_address(hass, address, True) is None:
+    ble_device = bluetooth.async_ble_device_from_address(hass, address, True)
+    if ble_device is None:
         raise ConfigEntryNotReady(f"BLE device {address} not found by any scanner")
 
     entry_title = entry.title
@@ -80,6 +98,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         verification_code=verification_code,
         device_type=device_type,
         connection_factory=_create_ble_connection,
+        ble_name=ble_device.name or entry.title,
     )
 
     # The library retries failed connection attempts itself; HA retries setup on top.
@@ -90,6 +109,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     coordinator = NetizenBLECoordinator(hass, device)
     await coordinator.async_config_entry_first_refresh()
+
+    # The first refresh fetched the reported model name, so features are final.
+    _remove_unsupported_entities(hass, entry, device)
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
