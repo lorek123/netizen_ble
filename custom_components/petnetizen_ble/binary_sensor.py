@@ -7,15 +7,12 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
     BinarySensorEntityDescription,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from petnetizen_feeder import decode_fault_flags
 
-from .const import DOMAIN
-from .coordinator import NetizenBLECoordinator
+from .coordinator import NetizenBLEConfigEntry, NetizenBLECoordinator
+from .entity import NetizenBLEEntity
 
 BINARY_SENSORS: list[BinarySensorEntityDescription] = [
     BinarySensorEntityDescription(
@@ -52,48 +49,30 @@ FEEDER_PROBLEM_SENSORS: list[BinarySensorEntityDescription] = [
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: NetizenBLEConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Netizen BLE binary sensors."""
-    coordinator: NetizenBLECoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
     device = coordinator.device
-    device_info: DeviceInfo = {
-        "identifiers": {(DOMAIN, device.address)},
-        "name": entry.title or device.name,
-        "manufacturer": "Pet Netizen",
-        "model": device.get_state("device_name") or "Feeder",
-    }
     active = list(BINARY_SENSORS)
     if device.device_type not in ("tc02", "cp01b"):
         active += FEEDER_PROBLEM_SENSORS
     entities = [
-        NetizenBLEBinarySensor(coordinator, device_info, desc)
-        for desc in active
-        if device.supports(desc.key)
+        NetizenBLEBinarySensor(coordinator, desc) for desc in active if device.supports(desc.key)
     ]
     async_add_entities(entities)
 
 
-class NetizenBLEBinarySensor(CoordinatorEntity[NetizenBLECoordinator], BinarySensorEntity):
+class NetizenBLEBinarySensor(NetizenBLEEntity, BinarySensorEntity):
     """Netizen BLE binary sensor."""
 
     def __init__(
         self,
         coordinator: NetizenBLECoordinator,
-        device_info: DeviceInfo,
         description: BinarySensorEntityDescription,
     ) -> None:
-        super().__init__(coordinator)
-        self._device = coordinator.device
-        self._attr_device_info = device_info
-        self.entity_description = description
-        self._attr_unique_id = f"{self._device.address}_{description.key}"
-        self._attr_has_entity_name = True
-
-    @property
-    def available(self) -> bool:
-        return self.coordinator.reachable
+        super().__init__(coordinator, description)
 
     @property
     def is_on(self) -> bool | None:

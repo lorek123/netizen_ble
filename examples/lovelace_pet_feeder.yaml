@@ -9,7 +9,7 @@
 #   - number.pet_feeder_portions       → Portions per feed (1–15)
 #   - switch.pet_feeder_prompt_sound   → Prompt sound on/off
 #   - sensor.pet_feeder_feed_plan      → Schedule (slot count + slots in attributes)
-#   - button.pet_feeder_query_feed_plan → Refresh schedule from device
+#   - sensor.pet_feeder_next_feeding   → Next scheduled feed
 
 # -------- Card 1: Feed & sound controls --------
 type: vertical-stack
@@ -25,15 +25,15 @@ cards:
       - entity: switch.pet_feeder_prompt_sound
         name: Prompt sound
 
-  # -------- Card 2: Schedule (slot count + refresh) --------
+  # -------- Card 2: Schedule --------
   - type: entities
     title: Schedule
     show_header_toggle: false
     entities:
       - entity: sensor.pet_feeder_feed_plan
         name: Feed plan
-      - entity: button.pet_feeder_query_feed_plan
-        name: Refresh schedule from device
+      - entity: sensor.pet_feeder_next_feeding
+        name: Next feeding
 
   # Optional Card 3: Readable schedule (requires template_sensor_schedule.yaml)
   # Uncomment and add below to show formatted schedule. Add the template sensor first.

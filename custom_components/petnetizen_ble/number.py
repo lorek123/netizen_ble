@@ -5,15 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.components.number import NumberEntity, NumberEntityDescription, NumberMode
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import PERCENTAGE
+from homeassistant.const import PERCENTAGE, EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
-from .coordinator import NetizenBLECoordinator
+from .coordinator import NetizenBLEConfigEntry, NetizenBLECoordinator
+from .entity import NetizenBLEEntity
 
 PORTIONS_DESC = NumberEntityDescription(
     key="portions",
@@ -22,6 +19,7 @@ PORTIONS_DESC = NumberEntityDescription(
     native_min_value=1,
     native_max_value=15,
     native_step=1,
+    entity_category=EntityCategory.CONFIG,
 )
 
 CP01B_NUMBERS: list[NumberEntityDescription] = [
@@ -194,57 +192,35 @@ TC02_NUMBERS: list[NumberEntityDescription] = [
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: NetizenBLEConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Netizen BLE number entities."""
-    coordinator: NetizenBLECoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
     device = coordinator.device
-    device_info: DeviceInfo = {
-        "identifiers": {(DOMAIN, device.address)},
-        "name": entry.title or device.name,
-        "manufacturer": "Pet Netizen",
-        "model": device.get_state("device_name") or "Feeder",
-    }
     entities: list[NumberEntity] = (
-        []
-        if device.device_type == "tc02"
-        else [NetizenBLENumber(coordinator, device_info, PORTIONS_DESC)]
+        [] if device.device_type == "tc02" else [NetizenBLENumber(coordinator, PORTIONS_DESC)]
     )
 
     if device.device_type == "cp01b":
-        entities += [
-            NetizenBLEDeviceNumber(coordinator, device_info, desc) for desc in CP01B_NUMBERS
-        ]
+        entities += [NetizenBLEDeviceNumber(coordinator, desc) for desc in CP01B_NUMBERS]
 
     if device.device_type == "tc02":
-        entities += [
-            NetizenBLEDeviceNumber(coordinator, device_info, desc) for desc in TC02_NUMBERS
-        ]
+        entities += [NetizenBLEDeviceNumber(coordinator, desc) for desc in TC02_NUMBERS]
 
     async_add_entities(entities)
 
 
-class NetizenBLENumber(CoordinatorEntity[NetizenBLECoordinator], NumberEntity):
+class NetizenBLENumber(NetizenBLEEntity, NumberEntity):
     """Portions to use for manual feed (1–15)."""
 
     def __init__(
         self,
         coordinator: NetizenBLECoordinator,
-        device_info: DeviceInfo,
         description: NumberEntityDescription,
     ) -> None:
-        super().__init__(coordinator)
-        self._device = coordinator.device
-        self._attr_device_info = device_info
-        self.entity_description = description
-        self._attr_unique_id = f"{self._device.address}_{description.key}"
-        self._attr_has_entity_name = True
+        super().__init__(coordinator, description)
         self._portions = 1
-
-    @property
-    def available(self) -> bool:
-        return self.coordinator.reachable
 
     @property
     def native_value(self) -> float | None:
@@ -256,25 +232,15 @@ class NetizenBLENumber(CoordinatorEntity[NetizenBLECoordinator], NumberEntity):
         self.async_write_ha_state()
 
 
-class NetizenBLEDeviceNumber(CoordinatorEntity[NetizenBLECoordinator], NumberEntity):
+class NetizenBLEDeviceNumber(NetizenBLEEntity, NumberEntity):
     """CP01B data-point number: reads from coordinator data, writes via device setter."""
 
     def __init__(
         self,
         coordinator: NetizenBLECoordinator,
-        device_info: DeviceInfo,
         description: NumberEntityDescription,
     ) -> None:
-        super().__init__(coordinator)
-        self._device = coordinator.device
-        self._attr_device_info = device_info
-        self.entity_description = description
-        self._attr_unique_id = f"{self._device.address}_{description.key}"
-        self._attr_has_entity_name = True
-
-    @property
-    def available(self) -> bool:
-        return self.coordinator.reachable
+        super().__init__(coordinator, description)
 
     @property
     def native_value(self) -> float | None:

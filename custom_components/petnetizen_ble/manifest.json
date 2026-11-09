@@ -1,5 +1,5 @@
 {
-  "domain": "netizen_ble",
+  "domain": "petnetizen_ble",
   "name": "Pet Netizen BLE",
   "bluetooth": [
     {
@@ -26,6 +26,6 @@
   "integration_type": "device",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/lorek123/netizen_ble/issues",
-  "requirements": ["petnetizen-feeder>=0.9.0", "bleak-retry-connector>=4.0.0"],
-  "version": "2.13.0"
+  "requirements": ["petnetizen-feeder>=0.10.0", "bleak-retry-connector>=4.0.0"],
+  "version": "3.0.0"
 }

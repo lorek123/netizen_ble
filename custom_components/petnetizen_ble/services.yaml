@@ -1,0 +1,11 @@
+set_feed_plan:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: petnetizen_ble
+    schedule:
+      required: true
+      selector:
+        object:

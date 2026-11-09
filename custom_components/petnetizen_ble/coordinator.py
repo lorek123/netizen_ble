@@ -6,6 +6,7 @@ import logging
 from datetime import timedelta
 from typing import Any
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
@@ -15,6 +16,8 @@ _LOGGER = logging.getLogger(__name__)
 
 POLL_INTERVAL = timedelta(seconds=60)
 
+type NetizenBLEConfigEntry = ConfigEntry[NetizenBLECoordinator]
+
 
 class NetizenBLECoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Coordinator for Netizen BLE device state."""
@@ -22,12 +25,14 @@ class NetizenBLECoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def __init__(
         self,
         hass: HomeAssistant,
+        entry: NetizenBLEConfigEntry,
         device: NetizenBLEDevice,
     ) -> None:
         super().__init__(
             hass,
             _LOGGER,
-            name="netizen_ble",
+            config_entry=entry,
+            name="petnetizen_ble",
             update_interval=POLL_INTERVAL,
         )
         self._device = device
@@ -39,10 +44,6 @@ class NetizenBLECoordinator(DataUpdateCoordinator[dict[str, Any]]):
     @property
     def device(self) -> NetizenBLEDevice:
         return self._device
-
-    @property
-    def connected(self) -> bool:
-        return self._device.is_connected
 
     @property
     def reachable(self) -> bool:
@@ -84,9 +85,7 @@ class NetizenBLECoordinator(DataUpdateCoordinator[dict[str, Any]]):
             except Exception as e:
                 _LOGGER.debug("Netizen query_status failed: %s", e)
 
-        state = getattr(self._device, "_state", {})
-        optimistic = getattr(self._device, "_optimistic", {})
-        return {**state, **optimistic}
+        return self._device.snapshot()
 
     async def async_unload(self) -> None:
         if self._unsub:

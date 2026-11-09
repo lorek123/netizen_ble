@@ -1,52 +1,41 @@
 {
   "config": {
+    "flow_title": "{name}",
     "step": {
       "user": {
         "title": "Add Pet Netizen feeder",
-        "description": "Choose how to add the device."
-      },
-      "manual": {
-        "title": "Enter MAC address",
-        "description": "{hint}",
-        "data": {
-          "address": "MAC address",
-          "name": "Device name (optional)",
-          "verification_code": "Verification code (optional)"
-        },
-        "data_description": {
-          "address": "Bluetooth MAC in format XX:XX:XX:XX:XX:XX",
-          "verification_code": "Leave default 00000000 unless you use a custom code in the app"
-        }
-      },
-      "discover": {
-        "title": "Search for devices",
-        "description": "Select a feeder found by BLE scan.",
+        "description": "Choose a feeder found by Home Assistant's Bluetooth.",
         "data": {
           "address": "Device",
-          "verification_code": "Verification code (optional)"
+          "verification_code": "Verification code"
+        },
+        "data_description": {
+          "verification_code": "Leave 00000000 unless you set a custom code in the Pet Netizen app."
         }
       },
-      "confirm": {
+      "bluetooth_confirm": {
         "title": "Add Pet Netizen feeder",
-        "description": "Add {name}?"
+        "description": "Add {name}?",
+        "data": {
+          "verification_code": "Verification code"
+        },
+        "data_description": {
+          "verification_code": "Leave 00000000 unless you set a custom code in the Pet Netizen app."
+        }
       }
     },
     "error": {
-      "invalid_address": "Invalid MAC address. Use format XX:XX:XX:XX:XX:XX",
-      "not_supported": "This device is not a supported Pet Netizen feeder",
-      "no_discovery": "No discovery info",
-      "no_devices_found": "No feeders found. Make sure the device is on and in range.",
-      "invalid_selection": "Please select a device."
+      "cannot_connect": "Failed to connect",
+      "invalid_verification_code": "The feeder rejected the verification code. Use the code set in the Pet Netizen app, or 00000000 if you never set one."
     },
     "abort": {
-      "not_supported": "This device is not a supported Pet Netizen feeder",
       "already_configured": "Device is already configured",
-      "no_discovery": "No discovery info"
+      "no_devices_found": "No devices found on the network",
+      "not_supported": "This device is not a supported Pet Netizen feeder."
     }
   },
   "entity": {
     "switch": {
-      "manual_feed": { "name": "Manual feed" },
       "child_lock": { "name": "Child lock" },
       "prompt_sound": { "name": "Prompt sound" },
       "led": { "name": "LED indicator" },
@@ -56,13 +45,6 @@
       "long_ring": { "name": "Long ring" },
       "cp01b_sound": { "name": "Sound" }
     },
-    "binary_sensor": {
-      "fault": { "name": "Fault" },
-      "low_battery": { "name": "Low battery" },
-      "stuck_grain": { "name": "Food stuck" },
-      "food_blocked": { "name": "Food outlet blocked" },
-      "out_of_food": { "name": "Out of food" }
-    },
     "sensor": {
       "battery_level": { "name": "Battery" },
       "power_source": {
@@ -71,17 +53,23 @@
       },
       "feed_plan": { "name": "Feed plan" },
       "next_feeding": { "name": "Next feeding" },
-      "firmware_version": { "name": "Firmware version" },
-      "fault_status": { "name": "Fault status" },
-      "feeding_status": { "name": "Feeding status" },
+      "feeding_status": {
+        "name": "Feeding status",
+        "state": { "idle": "Idle", "feeding": "Feeding", "done": "Done", "failed": "Failed" }
+      },
       "last_feed_time": { "name": "Last feed time" },
       "tc02_auto_countdown_remaining": { "name": "Countdown remaining" }
     },
+    "binary_sensor": {
+      "fault": { "name": "Fault" },
+      "low_battery": { "name": "Low battery" },
+      "stuck_grain": { "name": "Food stuck" },
+      "food_blocked": { "name": "Food outlet blocked" },
+      "out_of_food": { "name": "Out of food" }
+    },
     "button": {
       "feed_now": { "name": "Feed now" },
-      "query_feed_plan": { "name": "Refresh schedule" },
-      "sync_time": { "name": "Sync time" },
-      "factory_reset": { "name": "Factory reset" }
+      "sync_time": { "name": "Sync time" }
     },
     "number": {
       "portions": { "name": "Portions" },
@@ -108,5 +96,23 @@
       "dnd_start": { "name": "Do not disturb start" },
       "dnd_end": { "name": "Do not disturb end" }
     }
+  },
+  "services": {
+    "set_feed_plan": {
+      "name": "Set feed plan",
+      "description": "Sets the feeding schedule of a Pet Netizen feeder.",
+      "fields": {
+        "device_id": { "name": "Device", "description": "The feeder to update." },
+        "schedule": {
+          "name": "Schedule",
+          "description": "List of slots, each with weekdays, time (HH:MM), portions and enabled."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "device_not_found": { "message": "No Pet Netizen feeder found for device {device_id}." },
+    "entry_not_loaded": { "message": "{name} is not loaded; check that the feeder is reachable." },
+    "set_feed_plan_failed": { "message": "Could not write the feeding schedule to {name}." }
   }
 }

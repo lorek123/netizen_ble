@@ -32,16 +32,15 @@ Also works with `JK-`, `ALI-`, `PET-`, `FEED-` prefix devices using the same BLE
 Optional entities are created only for models that have the feature, using the same
 per-model feature list as the Pet Netizen app (matched by the advertised BLE name, e.g.
 `Du-W11B`). Unknown models get every entity. Entities for unsupported features are
-removed on startup.
+removed on startup. Settings (switches, do-not-disturb times, portions, sync time) are
+*configuration* entities and power source is *diagnostic*; the firmware version is shown in the
+device info.
 
 | Platform | Entity | Notes |
 |---|---|---|
 | `button` | Feed now | Triggers feed using the Portions value |
-| `button` | Refresh schedule | Re-polls schedule from device |
-| `button` | Sync time | Syncs device clock to HA server time |
-| `button` | Factory reset | |
-| `number` | Portions | 1–15, used by Feed now and Manual feed switch |
-| `switch` | Manual feed | Momentary trigger (same as Feed now button) |
+| `button` | Sync time | Sets the feeder clock to Home Assistant's local time (config) |
+| `number` | Portions | 1–15, used by Feed now |
 | `switch` | Child lock | Models with child lock |
 | `switch` | Prompt sound | Feeding reminder tone; models with it |
 | `switch` | LED indicator | Models with an indicator light |
@@ -53,9 +52,7 @@ removed on startup.
 | `sensor` | Power source | Mains / battery; models with a battery |
 | `sensor` | Feed plan | Slot count; full schedule in attributes |
 | `sensor` | Next feeding | Timestamp of next scheduled feed |
-| `sensor` | Firmware version | |
-| `sensor` | Fault status | Text description of fault code |
-| `sensor` | Feeding status | |
+| `sensor` | Feeding status | Idle / Feeding / Done / Failed |
 | `sensor` | Last feed time | Timestamp |
 | `binary_sensor` | Fault | `problem` class — any fault |
 | `binary_sensor` | Food stuck / Food outlet blocked / Out of food | Individual fault bits |
@@ -96,7 +93,7 @@ removed on startup.
 
 ## Services
 
-### `netizen_ble.set_feed_plan`
+### `petnetizen_ble.set_feed_plan`
 
 Set feed schedule from an automation or script.
 
@@ -124,21 +121,42 @@ enabled: true
 
 ### Manual
 
-Copy `custom_components/netizen_ble/` into your HA `custom_components/` directory and restart.
+Copy `custom_components/petnetizen_ble/` into your HA `custom_components/` directory and restart.
+
+## Upgrading from 2.x to 3.0
+
+3.0 renames the integration from `netizen_ble` to **`petnetizen_ble`** (the name intended for
+Home Assistant core) and removes a few entities. Home Assistant cannot move a device between
+integrations, so the feeder has to be added again:
+
+1. **Settings → Devices & services → Pet Netizen BLE** — delete the feeder entry.
+2. Update **Pet Netizen BLE** to 3.0 in HACS and restart Home Assistant. If a
+   `custom_components/netizen_ble` folder is left behind, delete it and restart again.
+3. The feeder is discovered again — click **Add**. Because the old entry was deleted first, the
+   entities get the same entity IDs as before.
+4. Update automations and scripts:
+
+| 2.x | 3.0 |
+|---|---|
+| Action `netizen_ble.set_feed_plan` | `petnetizen_ble.set_feed_plan` |
+| Manual feed switch | **Feed now** button |
+| Refresh schedule button | `homeassistant.update_entity` on any feeder entity |
+| Factory reset button | Removed (use the Pet Netizen app) |
+| Fault status sensor | **Fault** binary sensor plus Food stuck / Food outlet blocked / Out of food |
+| Firmware version sensor | Shown in the device info |
+| Feeding status `error` | `done` (the old value was a mis-decoding) |
 
 ## Setup
 
-1. **Settings → Devices & services → Add integration → Pet Netizen BLE**
-2. Choose **Search for devices** (BLE scan) or **Enter MAC address**
-3. Device type is auto-detected from the BLE name (`Du-TC02` → TC02, `Du-CP01B` → CP01B, etc.)
+Feeders in range of a Home Assistant Bluetooth adapter or proxy are discovered automatically
+and show up under **Settings → Devices & services** — click **Add**. You can also add one with
+**Add integration → Pet Netizen BLE** and pick it from the list of feeders Home Assistant
+currently sees. If none is listed, check that the feeder is powered and in range, and that it
+appears under **Settings → System → Hardware → Bluetooth**.
 
-The **verification code** defaults to `00000000` — leave it unless you set a custom code in the Pet Netizen app.
-
-## Finding your device MAC address
-
-- **nRF Connect** (Android/iOS) — scan and look for devices named `Du-*`, `JK-*`, etc.
-- **HA Bluetooth integration** — check **Settings → System → Hardware → Bluetooth** discovered devices
-- The MAC appears in the Pet Netizen app under device settings on some firmware versions
+The device type is detected from the Bluetooth name (`Du-TC02` → TC02, `Du-CP01B` → CP01B, …).
+The **verification code** defaults to `00000000` — leave it unless you set a custom code in the
+Pet Netizen app.
 
 ## BLE proxy (remote feeders)
 
@@ -156,12 +174,20 @@ bluetooth_proxy:
 
 When both a local adapter and a proxy can hear the feeder, Home Assistant picks the path for
 each connection by signal strength and free slots. Enable debug logging for
-`custom_components.netizen_ble` to see which path each connection used.
+`custom_components.petnetizen_ble` to see which path each connection used.
 
 ## Protocol
 
 EA/AE framing over Tuya BLE (service UUID `0000ae30`). Reverse engineered from the
 Pet Netizen Android app. No cloud involvement at runtime.
+
+## Development
+
+```bash
+uv sync --dev          # Python 3.14.2+, pulls Home Assistant's test harness
+uv run pytest          # tests in tests/ (config flow, setup/unload, actions)
+uv run ruff check custom_components/ tests/
+```
 
 ## License
 

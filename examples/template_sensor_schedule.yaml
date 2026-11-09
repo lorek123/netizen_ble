@@ -9,7 +9,7 @@
 template:
   - sensor:
       - name: "Feeder schedule"
-        unique_id: netizen_ble_feeder_schedule_readable
+        unique_id: petnetizen_ble_feeder_schedule_readable
         state: "{% set s = state_attr('sensor.pet_feeder_feed_plan', 'slots') or [] %}{% if s %}{{ s | length }} slot(s){% else %}No schedule{% endif %}"
         attributes:
           slots_text: >

@@ -43,7 +43,7 @@ All use **service UUID `0000ae30`** and the same **dpMappings** (real_tags 00–
 
 Same service UUID and same 00–19, 60, **plus**:
 
-| real_tag | mapping_tag   | In netizen_ble |
+| real_tag | mapping_tag   | In petnetizen_ble |
 |----------|---------------|-----------------|
 | 40       | train_count   | Yes (sensor)   |
 | 41       | train         | Yes (button “Dispense reward” + service) |
@@ -57,7 +57,7 @@ Same service UUID and same 00–19, 60, **plus**:
 
 Same service UUID and same 00–19, 60, **plus** 0x50–0x59:
 
-| real_tag | mapping_tag        | In netizen_ble        |
+| real_tag | mapping_tag        | In petnetizen_ble        |
 |----------|---------------------|------------------------|
 | 50       | operation_mode      | Yes (sensor + number) |
 | 51       | rotation_mode       | Yes (sensor + number) |

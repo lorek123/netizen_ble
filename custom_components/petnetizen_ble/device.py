@@ -7,6 +7,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from homeassistant.util import dt as dt_util
 from petnetizen_feeder import FeederDevice as LibraryFeederDevice
 from petnetizen_feeder import FeedSchedule, ModelFeatures, Weekday, model_features
 
@@ -43,8 +44,9 @@ class NetizenBLEDevice:
         connection_factory: Any = None,
         ble_name: str | None = None,
     ) -> None:
+        address = address.upper()
         self._address = (
-            address.upper()
+            address
             if ":" in address
             else ":".join(address[i : i + 2] for i in range(0, min(12, len(address)), 2))
         )
@@ -54,6 +56,7 @@ class NetizenBLEDevice:
             self._verification_code,
             device_type=device_type,
             connection_factory=connection_factory,
+            clock=dt_util.now,  # HA's time zone, even if the process runs in UTC
         )
         self._ble_name = ble_name
         self._state: dict[str, Any] = {}
@@ -64,6 +67,11 @@ class NetizenBLEDevice:
     @property
     def address(self) -> str:
         return self._address
+
+    @property
+    def verification_rejected(self) -> bool:
+        """True if the feeder rejected the verification code on the last connect."""
+        return self._device.verification_rejected
 
     @property
     def is_connected(self) -> bool:
@@ -93,8 +101,12 @@ class NetizenBLEDevice:
             return self._optimistic[key]
         return self._state.get(key, default)
 
+    def snapshot(self) -> dict[str, Any]:
+        """Current state with optimistic (just-set) values applied."""
+        return {**self._state, **self._optimistic}
+
     def _notify_listeners(self) -> None:
-        state = {**self._state, **self._optimistic}
+        state = self.snapshot()
         for cb in self._listeners:
             try:
                 cb(state.copy())
@@ -231,14 +243,6 @@ class NetizenBLEDevice:
             _LOGGER.debug("Set DND failed: %s", e)
             return False
 
-    async def factory_reset(self) -> bool:
-        await self.async_ensure_connected()
-        try:
-            return await self._device.factory_reset()
-        except Exception as e:
-            _LOGGER.debug("Factory reset failed: %s", e)
-            return False
-
     async def query_status(self) -> None:
         """Query schedule and update state."""
         async with self._lock:
@@ -364,11 +368,6 @@ class NetizenBLEDevice:
 
             self._notify_listeners()
 
-    async def query_feed_plan(self) -> bool:
-        """Request schedule refresh."""
-        await self.query_status()
-        return True
-
     # ------------------------------------------------------------------
     # CP01B setters
     # ------------------------------------------------------------------
@@ -473,7 +472,3 @@ class NetizenBLEDevice:
             return self._device._protocol.device_type
         except AttributeError:
             return "standard"
-
-    def device_type_hint(self) -> str:
-        """This wrapper is feeder-only."""
-        return "feeder"

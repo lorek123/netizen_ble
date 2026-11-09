@@ -5,24 +5,24 @@ from __future__ import annotations
 from datetime import time
 
 from homeassistant.components.time import TimeEntity, TimeEntityDescription
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
-from .coordinator import NetizenBLECoordinator
+from .coordinator import NetizenBLEConfigEntry, NetizenBLECoordinator
+from .entity import NetizenBLEEntity
 
 TIME_ENTITIES: list[TimeEntityDescription] = [
     TimeEntityDescription(
         key="dnd_start",
         translation_key="dnd_start",
+        entity_category=EntityCategory.CONFIG,
         icon="mdi:bell-sleep-outline",
     ),
     TimeEntityDescription(
         key="dnd_end",
         translation_key="dnd_end",
+        entity_category=EntityCategory.CONFIG,
         icon="mdi:bell-outline",
     ),
 ]
@@ -30,46 +30,26 @@ TIME_ENTITIES: list[TimeEntityDescription] = [
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: NetizenBLEConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Netizen BLE time entities."""
-    coordinator: NetizenBLECoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
     device = coordinator.device
-    device_info: DeviceInfo = {
-        "identifiers": {(DOMAIN, device.address)},
-        "name": entry.title or device.name,
-        "manufacturer": "Pet Netizen",
-        "model": device.get_state("device_name") or "Feeder",
-    }
     async_add_entities(
-        [
-            NetizenBLETime(coordinator, device_info, desc)
-            for desc in TIME_ENTITIES
-            if device.supports(desc.key)
-        ]
+        [NetizenBLETime(coordinator, desc) for desc in TIME_ENTITIES if device.supports(desc.key)]
     )
 
 
-class NetizenBLETime(CoordinatorEntity[NetizenBLECoordinator], TimeEntity):
+class NetizenBLETime(NetizenBLEEntity, TimeEntity):
     """Netizen BLE time entity for DND start/end time."""
 
     def __init__(
         self,
         coordinator: NetizenBLECoordinator,
-        device_info: DeviceInfo,
         description: TimeEntityDescription,
     ) -> None:
-        super().__init__(coordinator)
-        self._device = coordinator.device
-        self._attr_device_info = device_info
-        self.entity_description = description
-        self._attr_unique_id = f"{self._device.address}_{description.key}"
-        self._attr_has_entity_name = True
-
-    @property
-    def available(self) -> bool:
-        return self.coordinator.reachable
+        super().__init__(coordinator, description)
 
     @property
     def native_value(self) -> time | None:

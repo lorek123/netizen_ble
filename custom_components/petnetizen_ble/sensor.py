@@ -12,14 +12,12 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
-from .coordinator import NetizenBLECoordinator
+from .coordinator import NetizenBLEConfigEntry, NetizenBLECoordinator
+from .entity import NetizenBLEEntity
 
 SENSORS: list[SensorEntityDescription] = [
     SensorEntityDescription(
@@ -36,6 +34,7 @@ SENSORS: list[SensorEntityDescription] = [
         icon="mdi:power-plug",
         device_class=SensorDeviceClass.ENUM,
         options=["mains", "battery"],
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="feed_plan",
@@ -49,19 +48,11 @@ SENSORS: list[SensorEntityDescription] = [
         device_class=SensorDeviceClass.TIMESTAMP,
     ),
     SensorEntityDescription(
-        key="firmware_version",
-        translation_key="firmware_version",
-        icon="mdi:chip",
-    ),
-    SensorEntityDescription(
-        key="fault_status",
-        translation_key="fault_status",
-        icon="mdi:alert-circle-outline",
-    ),
-    SensorEntityDescription(
         key="feeding_status",
         translation_key="feeding_status",
         icon="mdi:food-variant",
+        device_class=SensorDeviceClass.ENUM,
+        options=["idle", "feeding", "done", "failed"],
     ),
     SensorEntityDescription(
         key="last_feed_time",
@@ -122,18 +113,12 @@ def _next_feeding(slots: list[dict]) -> tuple[datetime | None, dict | None]:
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: NetizenBLEConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Netizen BLE sensors."""
-    coordinator: NetizenBLECoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
     device = coordinator.device
-    device_info: DeviceInfo = {
-        "identifiers": {(DOMAIN, device.address)},
-        "name": entry.title or device.name,
-        "manufacturer": "Pet Netizen",
-        "model": device.get_state("device_name") or "Feeder",
-    }
     is_tc02 = device.device_type == "tc02"
     active = [
         desc
@@ -142,29 +127,19 @@ async def async_setup_entry(
     ]
     if is_tc02:
         active += TC02_SENSORS
-    entities = [NetizenBLESensor(coordinator, device_info, desc) for desc in active]
+    entities = [NetizenBLESensor(coordinator, desc) for desc in active]
     async_add_entities(entities)
 
 
-class NetizenBLESensor(CoordinatorEntity[NetizenBLECoordinator], SensorEntity):
+class NetizenBLESensor(NetizenBLEEntity, SensorEntity):
     """Netizen BLE sensor."""
 
     def __init__(
         self,
         coordinator: NetizenBLECoordinator,
-        device_info: DeviceInfo,
         description: SensorEntityDescription,
     ) -> None:
-        super().__init__(coordinator)
-        self._device = coordinator.device
-        self._attr_device_info = device_info
-        self.entity_description = description
-        self._attr_unique_id = f"{self._device.address}_{description.key}"
-        self._attr_has_entity_name = True
-
-    @property
-    def available(self) -> bool:
-        return self.coordinator.reachable
+        super().__init__(coordinator, description)
 
     @property
     def native_value(self) -> str | int | datetime | None:
@@ -177,20 +152,14 @@ class NetizenBLESensor(CoordinatorEntity[NetizenBLECoordinator], SensorEntity):
             slots = data.get("feed_plan_slots") or []
             next_dt, _ = _next_feeding(slots)
             return next_dt
-        if key == "firmware_version":
-            return data.get("device_version") or None
-        if key == "fault_status":
-            code = data.get("fault_code")
-            if code is None:
-                return None
-            return "ok" if code == 0 else f"fault_{code}"
         if key == "power_source":
             mode = data.get("power_mode")
             if mode is None:
                 return None
             return "battery" if mode == "Battery" else "mains"
         if key == "feeding_status":
-            return data.get("feeding_status") or None
+            status = data.get("feeding_status")
+            return status if status in ("idle", "feeding", "done", "failed") else None
         if key == "last_feed_time":
             result = data.get("last_feed_result")
             if not result or not isinstance(result, dict):
@@ -224,8 +193,6 @@ class NetizenBLESensor(CoordinatorEntity[NetizenBLECoordinator], SensorEntity):
                 attrs["portions"] = slot.get("portions", 1)
                 attrs["weekdays"] = slot.get("weekdays", [])
                 attrs["time"] = slot.get("time", "")
-        if key == "firmware_version" and data.get("device_name"):
-            attrs["device_name"] = data["device_name"]
         if key == "last_feed_time":
             result = data.get("last_feed_result")
             if isinstance(result, dict):

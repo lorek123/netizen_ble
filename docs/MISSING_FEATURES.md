@@ -37,7 +37,7 @@ TEASER_DEVICE_UUID_NOTIFY   = "0000ae02-0000-1000-8000-00805f9b34fb"
 TEASER_DEVICE_UUID_WRITE    = "0000ae01-0000-1000-8000-00805f9b34fb"
 ```
 
-**Problem:** `custom_components/netizen_ble/manifest.json` `bluetooth` filter has `0000ae30`, `0000fff0`,
+**Problem:** `custom_components/petnetizen_ble/manifest.json` `bluetooth` filter has `0000ae30`, `0000fff0`,
 `0000ffff` but NOT `0000ae00`. Call Pet and Cat Teaser devices are never advertised to HA.
 
 **Fix:** Add to `manifest.json` bluetooth filter:
@@ -315,9 +315,9 @@ Du-TC02 uses EA/AE framing on service UUID `0000ae30` (same as feeders) — **no
 **Implemented in:**
 - `petnetizen_feeder/protocol.py`: TC02 command constants, decode cases, `set_tc02_dp()`, `set_tc02_color_rgb()`
 - `petnetizen_feeder/feeder.py`: `get_tc02_state()`, 9 setter methods
-- `netizen_ble/config_flow.py`: `"TC02"` name → `device_type = "tc02"`
-- `netizen_ble/device.py`: `query_status()` TC02 block, `_set_tc02()`, 9 setter wrappers
-- `netizen_ble/number.py`: `TC02_NUMBERS` list, `async_setup_entry` gate, RGB channel RGB write-through
+- `petnetizen_ble/config_flow.py`: `"TC02"` name → `device_type = "tc02"`
+- `petnetizen_ble/device.py`: `query_status()` TC02 block, `_set_tc02()`, 9 setter wrappers
+- `petnetizen_ble/number.py`: `TC02_NUMBERS` list, `async_setup_entry` gate, RGB channel RGB write-through
 - `strings.json` / `translations/en.json`: TC02 entity translation keys
 
 | real_tag | key | Entity | Range |

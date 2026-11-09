@@ -1,6 +1,6 @@
 """Constants for Pet Netizen BLE integration (feeder-only, uses petnetizen_feeder library)."""
 
-DOMAIN = "netizen_ble"
+DOMAIN = "petnetizen_ble"
 
 CONF_ADDRESS = "address"
 CONF_VERIFICATION_CODE = "verification_code"
