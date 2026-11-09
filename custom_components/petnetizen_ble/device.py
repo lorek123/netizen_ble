@@ -15,6 +15,9 @@ from .const import DEFAULT_VERIFICATION_CODE
 
 _LOGGER = logging.getLogger(__name__)
 
+# Weekday order used when reporting and validating schedule slots.
+WEEKDAY_ORDER = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+
 # Entity/state key -> ModelFeatures field. Keys not listed are always supported.
 _FEATURE_FIELDS = {
     "child_lock": "child_lock",
@@ -244,10 +247,23 @@ class NetizenBLEDevice:
             )
         await self.async_ensure_connected()
         try:
-            return await self._device.set_schedule(schedules)
+            ok = await self._device.set_schedule(schedules)
         except Exception as e:
             _LOGGER.debug("Set schedule failed: %s", e)
             return False
+        if ok:
+            # Show the written plan right away; the next poll reads it back.
+            self._state["feed_plan_slots"] = [
+                {
+                    "weekdays": [d for d in WEEKDAY_ORDER if d in s.weekdays],
+                    "time": s.time,
+                    "portions": s.portions,
+                    "enabled": s.enabled,
+                }
+                for s in schedules
+            ]
+            self._notify_listeners()
+        return ok
 
     async def set_led(self, enabled: bool) -> bool:
         return await self._set_bool_state("led", enabled, self._device.set_led(enabled))

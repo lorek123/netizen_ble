@@ -11,7 +11,8 @@ DU-F14B, plus the Du-TC02 and DU-CP01B cat toys. Each model only gets the entiti
 
 ## Features
 
-- **Feed now** button with a **Portions** setting, and the `petnetizen_ble.set_feed_plan` action
+- **Feed now** button with a **Portions** setting
+- Schedule actions: `set_feeding`, `remove_feeding`, `set_feeding_schedule` (up to 10 feedings)
 - **Feeding status**, **Last feed time**, **Feed plan** and **Next feeding** sensors
 - **Fault** sensors: any fault, food stuck, food outlet blocked, out of food, low battery
 - Settings where the model has them: child lock, prompt sound, LED, auto lock, do not disturb

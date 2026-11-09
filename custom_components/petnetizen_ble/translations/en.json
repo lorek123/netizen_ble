@@ -98,21 +98,65 @@
     }
   },
   "services": {
-    "set_feed_plan": {
-      "name": "Set feed plan",
-      "description": "Sets the feeding schedule of a Pet Netizen feeder.",
+    "set_feeding": {
+      "name": "Set feeding",
+      "description": "Adds a scheduled feeding, or updates the one at the same time.",
       "fields": {
-        "device_id": { "name": "Device", "description": "The feeder to update." },
+        "device_id": { "name": "Feeder", "description": "The feeder to update." },
+        "time": { "name": "Time", "description": "When to feed." },
+        "weekdays": { "name": "Days", "description": "Days of the week to feed on." },
+        "portions": { "name": "Portions", "description": "Portions to dispense (1–15)." },
+        "enabled": { "name": "Enabled", "description": "Whether this feeding is active." }
+      }
+    },
+    "remove_feeding": {
+      "name": "Remove feeding",
+      "description": "Removes the scheduled feeding at the given time.",
+      "fields": {
+        "device_id": { "name": "Feeder", "description": "The feeder to update." },
+        "time": { "name": "Time", "description": "Time of the feeding to remove." }
+      }
+    },
+    "set_feeding_schedule": {
+      "name": "Set feeding schedule",
+      "description": "Replaces the whole feeding schedule (up to 10 feedings).",
+      "fields": {
+        "device_id": { "name": "Feeder", "description": "The feeder to update." },
         "schedule": {
           "name": "Schedule",
-          "description": "List of slots, each with weekdays, time (HH:MM), portions and enabled."
+          "description": "List of feedings, each with time (HH:MM), weekdays (mon–sun), portions (1–15) and enabled."
         }
+      }
+    },
+    "set_feed_plan": {
+      "name": "Set feed plan (deprecated)",
+      "description": "Deprecated: use Set feeding schedule.",
+      "fields": {
+        "device_id": { "name": "Feeder", "description": "The feeder to update." },
+        "schedule": { "name": "Schedule", "description": "Same as Set feeding schedule." }
+      }
+    }
+  },
+  "selector": {
+    "weekday": {
+      "options": {
+        "mon": "Monday",
+        "tue": "Tuesday",
+        "wed": "Wednesday",
+        "thu": "Thursday",
+        "fri": "Friday",
+        "sat": "Saturday",
+        "sun": "Sunday"
       }
     }
   },
   "exceptions": {
     "device_not_found": { "message": "No Pet Netizen feeder found for device {device_id}." },
     "entry_not_loaded": { "message": "{name} is not loaded; check that the feeder is reachable." },
-    "set_feed_plan_failed": { "message": "Could not write the feeding schedule to {name}." }
+    "set_feed_plan_failed": { "message": "Could not write the feeding schedule to {name}." },
+    "schedule_unknown": { "message": "The feeding schedule of {name} has not been read yet; try again when the feeder is reachable." },
+    "too_many_feedings": { "message": "A feeder can hold at most {max} scheduled feedings." },
+    "duplicate_feeding_time": { "message": "More than one feeding at {time}." },
+    "feeding_not_found": { "message": "{name} has no feeding at {time}." }
   }
 }

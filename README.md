@@ -102,22 +102,45 @@ power source and new feed records.
 
 ## Services
 
-### `petnetizen_ble.set_feed_plan`
+### Feeding schedule actions
 
-Set feed schedule from an automation or script.
+The feeder stores up to **10** scheduled feedings (time, days, 1–15 portions, on/off). It always
+replaces the whole schedule at once, so the single-feeding actions read the current schedule,
+change one feeding and write it back. The **Feed plan** sensor lists the current schedule in its
+`slots` attribute.
 
-| Field | Type | Notes |
-|---|---|---|
-| `device_id` | string | HA device ID |
-| `schedule` | list | List of slot objects (see below) |
-
-Slot object:
+| Action | What it does |
+|---|---|
+| `petnetizen_ble.set_feeding` | Adds a feeding, or updates the one at the same time |
+| `petnetizen_ble.remove_feeding` | Removes the feeding at a given time |
+| `petnetizen_ble.set_feeding_schedule` | Replaces the whole schedule |
+| `petnetizen_ble.set_feed_plan` | Deprecated alias of `set_feeding_schedule` |
 
 ```yaml
-weekdays: [mon, wed, fri]   # sun mon tue wed thu fri sat, or all
-time: "08:00"               # HH:MM
-portions: 1                 # 1–15
-enabled: true
+# Feed 2 portions at 07:30 on weekdays
+action: petnetizen_ble.set_feeding
+data:
+  device_id: YOUR_FEEDER_DEVICE_ID
+  time: "07:30"
+  weekdays: [mon, tue, wed, thu, fri]   # default: every day
+  portions: 2                           # default: 1
+  enabled: true                         # default: true
+
+# Remove it again
+action: petnetizen_ble.remove_feeding
+data:
+  device_id: YOUR_FEEDER_DEVICE_ID
+  time: "07:30"
+
+# Replace everything
+action: petnetizen_ble.set_feeding_schedule
+data:
+  device_id: YOUR_FEEDER_DEVICE_ID
+  schedule:
+    - time: "08:00"
+    - time: "18:30"
+      weekdays: [sat, sun]
+      portions: 2
 ```
 
 ## Installation
@@ -147,7 +170,7 @@ integrations, so the feeder has to be added again:
 
 | 2.x | 3.0 |
 |---|---|
-| Action `netizen_ble.set_feed_plan` | `petnetizen_ble.set_feed_plan` |
+| Action `netizen_ble.set_feed_plan` | `petnetizen_ble.set_feeding_schedule` (or `set_feeding` / `remove_feeding` for single feedings) |
 | Manual feed switch | **Feed now** button |
 | Refresh schedule button | `homeassistant.update_entity` on any feeder entity |
 | Factory reset button | Removed (use the Pet Netizen app) |

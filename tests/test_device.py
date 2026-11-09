@@ -344,3 +344,19 @@ def test_pushed_fields_without_ha_state_are_ignored(lib: MagicMock) -> None:
     pushed(lib)({"feed_records": []})
     assert device.snapshot() == {}
     assert seen == []
+
+
+async def test_written_schedule_is_shown_right_away(lib: MagicMock) -> None:
+    device = make()
+    seen: list[dict] = []
+    device.subscribe(seen.append)
+    assert await device.set_feed_plan(
+        [{"weekdays": ["fri", "mon"], "time": "07:00", "portions": 2, "enabled": True}]
+    )
+    expected = [{"weekdays": ["mon", "fri"], "time": "07:00", "portions": 2, "enabled": True}]
+    assert device.snapshot()["feed_plan_slots"] == expected
+    assert seen[-1]["feed_plan_slots"] == expected
+
+    lib.set_schedule.return_value = False
+    assert not await device.set_feed_plan([{"time": "09:00"}])
+    assert device.snapshot()["feed_plan_slots"] == expected  # unchanged
