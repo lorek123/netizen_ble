@@ -292,3 +292,55 @@ async def test_get_state_prefers_optimistic_value(lib: MagicMock) -> None:
     assert device.get_state("missing", "fallback") == "fallback"
     await device.set_led(False)
     assert device.get_state("led") is False  # just set, not yet confirmed
+
+
+def pushed(lib: MagicMock):
+    """The callback NetizenBLEDevice registered with the library."""
+    (listener,) = lib.add_state_listener.call_args.args
+    return listener
+
+
+async def test_pushed_child_lock_overrides_optimistic_unlock(lib: MagicMock) -> None:
+    """Du-W11B: unlocking only lasts a few seconds, then the feeder re-locks itself."""
+    device = make()
+    seen: list[dict] = []
+    device.subscribe(seen.append)
+
+    await device.set_child_lock(False)
+    assert device.snapshot()["child_lock"] is False
+
+    pushed(lib)({"child_lock": 1, "child_lock_text": "LOCKED"})
+    assert device.snapshot()["child_lock"] is True
+    assert "child_lock" not in device._optimistic
+    assert seen[-1]["child_lock"] is True  # coordinator is told right away
+
+
+def test_pushed_status_dnd_and_feed_records(lib: MagicMock) -> None:
+    device = make()
+    push = pushed(lib)
+    push({"feeding_status": 2, "feeding_status_text": "Done"})
+    push({"do_not_disturb": True, "dnd_start": "21:00", "dnd_end": "06:00"})
+    push({"fault_code": 4, "power_mode": "Battery", "led": True})
+    lib.get_last_feed_result.return_value = {"timestamp": "2026-11-10 00:00:39"}
+    push({"feed_records": [{"timestamp": "2026-11-10 00:00:39"}]})
+    assert device.snapshot() == {
+        "feeding_status": "done",
+        "dnd_enabled": True,
+        "dnd_start": "21:00",
+        "dnd_end": "06:00",
+        "fault_code": 4,
+        "power_mode": "Battery",
+        "led": True,
+        "last_feed_result": {"timestamp": "2026-11-10 00:00:39"},
+    }
+
+
+def test_pushed_fields_without_ha_state_are_ignored(lib: MagicMock) -> None:
+    device = make()
+    seen: list[dict] = []
+    device.subscribe(seen.append)
+    pushed(lib)({"verification_response": 1, "verification_success": True})
+    lib.get_last_feed_result.return_value = None
+    pushed(lib)({"feed_records": []})
+    assert device.snapshot() == {}
+    assert seen == []

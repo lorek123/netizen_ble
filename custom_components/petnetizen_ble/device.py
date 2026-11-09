@@ -32,6 +32,19 @@ _FEATURE_FIELDS = {
 # The app never exposes these for any known model.
 _NEVER_ON_KNOWN_MODELS = {"long_ring"}
 
+# Fields the feeder pushes that map 1:1 onto HA state, with their HA type.
+_PUSHED_FIELDS = {
+    "child_lock": bool,
+    "prompt_sound": bool,
+    "led": bool,
+    "auto_lock": bool,
+    "atmosphere_light": bool,
+    "long_ring": bool,
+    "fault_code": int,
+    "power_mode": str,
+    "battery_level": int,
+}
+
 
 class NetizenBLEDevice:
     """Wrapper around petnetizen_feeder FeederDevice for Home Assistant."""
@@ -63,6 +76,9 @@ class NetizenBLEDevice:
         self._listeners: list[Callable[[dict[str, Any]], None]] = []
         self._lock = asyncio.Lock()
         self._optimistic: dict[str, Any] = {}
+        # Apply what the feeder pushes right away (e.g. the child lock re-locking
+        # itself), instead of waiting for the next poll.
+        self._device.add_state_listener(self._on_feeder_state)
 
     @property
     def address(self) -> str:
@@ -100,6 +116,26 @@ class NetizenBLEDevice:
         if key in self._optimistic:
             return self._optimistic[key]
         return self._state.get(key, default)
+
+    def _on_feeder_state(self, fields: dict[str, Any]) -> None:
+        """Merge a notification from the feeder into HA state and tell listeners."""
+        changed: dict[str, Any] = {
+            key: to_ha(fields[key]) for key, to_ha in _PUSHED_FIELDS.items() if key in fields
+        }
+        if "feeding_status_text" in fields:
+            changed["feeding_status"] = fields["feeding_status_text"].lower()
+        if "do_not_disturb" in fields:
+            changed["dnd_enabled"] = fields["do_not_disturb"]
+            changed["dnd_start"] = fields.get("dnd_start", "22:00")
+            changed["dnd_end"] = fields.get("dnd_end", "08:00")
+        if "feed_records" in fields and (last := self._device.get_last_feed_result()):
+            changed["last_feed_result"] = last
+        if not changed:
+            return
+        self._state.update(changed)
+        for key in changed:
+            self._optimistic.pop(key, None)  # the feeder's word beats our guess
+        self._notify_listeners()
 
     def snapshot(self) -> dict[str, Any]:
         """Current state with optimistic (just-set) values applied."""

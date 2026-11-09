@@ -1844,7 +1844,7 @@ dev = [
     { name = "bluetooth-data-tools", specifier = "==1.29.24" },
     { name = "dbus-fast", specifier = "==5.0.22" },
     { name = "habluetooth", specifier = "==7.1.2" },
-    { name = "petnetizen-feeder", specifier = ">=0.10.0" },
+    { name = "petnetizen-feeder", specifier = ">=0.11.0" },
     { name = "pytest-homeassistant-custom-component", specifier = "==0.13.375" },
     { name = "ruff", specifier = ">=0.8.0" },
     { name = "serialx", specifier = "==1.11.0" },
@@ -1852,14 +1852,14 @@ dev = [
 
 [[package]]
 name = "petnetizen-feeder"
-version = "0.10.0"
+version = "0.11.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "bleak" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ec/a2/b33adfa12facdf34f4404dfb5b09f8f16c83021ec2332dc7be855b6ac270/petnetizen_feeder-0.10.0.tar.gz", hash = "sha256:99c526fd4d426f28ba3999ba1aa7f8e45ddaf3a36fc3b2ef01ed0ba0d7c1935e", size = 62292, upload-time = "2026-11-09T22:50:31.428Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/69/2f/b368c00c8e1d8e523a9741a9d71464011806f9cb1d1ae1b7ee6d60207ee3/petnetizen_feeder-0.11.0.tar.gz", hash = "sha256:1cdd888bb41b8746c868badf4142147632e92223418df8379cc858517a8c70d4", size = 63211, upload-time = "2026-11-09T23:10:30.489Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/64/a9/bdbe6faceeedca9fe31e318653a5cc5b6ee4c13cfb0399e494d23893067e/petnetizen_feeder-0.10.0-py3-none-any.whl", hash = "sha256:8cd7b55cb5f3a2e369156b79be4faba0b3a1b0e2db238ba2ec590bca6d13d870", size = 29371, upload-time = "2026-11-09T22:50:30.488Z" },
+    { url = "https://files.pythonhosted.org/packages/ad/e1/009eaf1419dc6f1cd12696924d50bbe2259d2ff5a72948239db069f523a3/petnetizen_feeder-0.11.0-py3-none-any.whl", hash = "sha256:c400e2b5edd9a33b4b1dbe80f622bbb16534f19b5b959a0e15b41cc86f80efea", size = 29780, upload-time = "2026-11-09T23:10:29.541Z" },
 ]
 
 [[package]]

@@ -41,7 +41,7 @@ device info.
 | `button` | Feed now | Triggers feed using the Portions value |
 | `button` | Sync time | Sets the feeder clock to Home Assistant's local time (config) |
 | `number` | Portions | 1–15, used by Feed now |
-| `switch` | Child lock | Models with child lock |
+| `switch` | Child lock | Models with child lock; see note below |
 | `switch` | Prompt sound | Feeding reminder tone; models with it |
 | `switch` | LED indicator | Models with an indicator light |
 | `switch` | Atmosphere light | Du-F03B |
@@ -58,6 +58,15 @@ device info.
 | `binary_sensor` | Food stuck / Food outlet blocked / Out of food | Individual fault bits |
 | `binary_sensor` | Low battery | Fault bit; only while on battery |
 | `time` | Do not disturb start / end | Models with do not disturb |
+
+**Child lock re-locks itself.** On feeders like the Du-W11B, turning child lock off only unlocks
+the buttons for a few seconds; the feeder then locks them again on its own. The Pet Netizen app
+behaves the same way (it calls this "The child lock is turned on automatically") and has no
+setting to keep it unlocked. The switch shows the feeder's real state, including when it re-locks.
+
+**Live updates.** Besides polling every 60 seconds, the integration applies what the feeder pushes
+on its own as soon as it arrives: child lock changes, feeding status (feeding → done), faults,
+power source and new feed records.
 
 ### DU-CP01B extras
 
