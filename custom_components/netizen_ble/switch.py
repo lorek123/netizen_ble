@@ -97,7 +97,7 @@ class NetizenBLESwitch(CoordinatorEntity[NetizenBLECoordinator], SwitchEntity):
     @property
     def is_on(self) -> bool | None:
         if self._is_feed:
-            return None  # momentary action
+            return False  # momentary: reads as off so HA shows a toggle, not "unknown"
         data = self.coordinator.data or {}
         key = self._state_key()
         if key == "do_not_disturb":

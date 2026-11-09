@@ -41,19 +41,19 @@ PLATFORMS: list[Platform] = [
 _LOGGER = logging.getLogger(__name__)
 
 
-def _remove_unsupported_entities(
-    hass: HomeAssistant, entry: ConfigEntry, device: NetizenBLEDevice
-) -> None:
-    """Drop registry entries for features this feeder model does not have."""
-    features = device.features
-    if features is None:
-        return
+def _remove_orphaned_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Drop registry entries no current entity claims.
+
+    Covers features this model lacks and entities removed in earlier versions
+    (e.g. the pre-2.2.2 child lock binary sensor). Call after platform setup.
+    """
     ent_reg = er.async_get(hass)
-    prefix = f"{device.address}_"
     for ent in er.async_entries_for_config_entry(ent_reg, entry.entry_id):
-        key = ent.unique_id.removeprefix(prefix)
-        if ent.unique_id.startswith(prefix) and not device.supports(key):
-            _LOGGER.debug("Removing %s: not supported by %s", ent.entity_id, features.model)
+        if ent.disabled_by is not None:
+            continue
+        state = hass.states.get(ent.entity_id)
+        if state is None or state.attributes.get("restored"):
+            _LOGGER.debug("Removing orphaned entity %s", ent.entity_id)
             ent_reg.async_remove(ent.entity_id)
 
 
@@ -110,9 +110,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = NetizenBLECoordinator(hass, device)
     await coordinator.async_config_entry_first_refresh()
 
-    # The first refresh fetched the reported model name, so features are final.
-    _remove_unsupported_entities(hass, entry, device)
-
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
     async def _async_stop(_: Event) -> None:
@@ -163,6 +160,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    _remove_orphaned_entities(hass, entry)
     return True
 
 

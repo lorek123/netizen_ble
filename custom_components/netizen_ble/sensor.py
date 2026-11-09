@@ -200,7 +200,8 @@ class NetizenBLESensor(CoordinatorEntity[NetizenBLECoordinator], SensorEntity):
                 return None
             try:
                 naive = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
-                return dt_util.as_local(naive)
+                # The feeder clock runs on local time (it is synced from the host).
+                return naive.replace(tzinfo=dt_util.get_default_time_zone())
             except (ValueError, TypeError):
                 return None
         if key == "tc02_auto_countdown_remaining":

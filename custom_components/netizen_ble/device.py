@@ -299,6 +299,22 @@ class NetizenBLEDevice:
                     self._state["feeding_status"] = feeding
             except Exception as e:
                 _LOGGER.debug("Query feeding status failed: %s", e)
+            for key, getter in (
+                ("led", self._device.get_led_status),
+                ("auto_lock", self._device.get_auto_lock_status),
+                ("atmosphere_light", self._device.get_atmosphere_light_status),
+                ("long_ring", self._device.get_long_ring_status),
+            ):
+                if not self.supports(key):
+                    continue
+                try:
+                    value = await getter()
+                    if value is not None:
+                        self._state[key] = value
+                        self._optimistic.pop(key, None)
+                except Exception as e:
+                    _LOGGER.debug("Query %s failed: %s", key, e)
+
             if self.supports("power_source"):
                 try:
                     power = await self._device.get_power_mode()
