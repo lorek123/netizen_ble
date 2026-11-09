@@ -25,6 +25,12 @@ dev = [
     "serialx==1.11.0",
 ]
 
+[tool.uv]
+# Test-only: homeassistant 2026.10.4 (pinned by the test harness) pins Pillow 12.3.0, which
+# has known vulnerabilities fixed in 13.0.0; Home Assistant itself moved to 13.0.0. Drop this
+# once pytest-homeassistant-custom-component pins a release with Pillow >= 13.
+override-dependencies = ["pillow>=13.0.0"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
