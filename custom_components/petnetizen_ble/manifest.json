@@ -4,6 +4,14 @@
   "bluetooth": [
     {
       "connectable": true,
+      "local_name": "Du-*"
+    },
+    {
+      "connectable": true,
+      "local_name": "DU-*"
+    },
+    {
+      "connectable": true,
       "service_uuid": "0000ae30-0000-1000-8000-00805f9b34fb"
     },
     {
@@ -27,5 +35,5 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/lorek123/netizen_ble/issues",
   "requirements": ["petnetizen-feeder>=0.11.0", "bleak-retry-connector>=4.0.0"],
-  "version": "3.2.0"
+  "version": "3.2.1"
 }
